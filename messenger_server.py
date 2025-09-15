@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
+import http.server
+import socketserver
 import json
 import os
-from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs
 import html
 import re
+from datetime import datetime
 
+# Import parsing functions from our existing module
 def fix_czech_chars(text):
     """Fix Czech character encoding issues"""
     if not text:
         return text
-
-    # First, try to fix mojibake by re-encoding
     try:
         if isinstance(text, str):
-            # Detect if text has mojibake patterns
             if 'Ã' in text or 'Ä' in text or 'Å' in text:
-                # Try to fix by encoding to latin-1 and decoding as utf-8
                 try:
                     fixed = text.encode('latin-1').decode('utf-8')
                     text = fixed
@@ -24,7 +24,6 @@ def fix_czech_chars(text):
                     pass
     except:
         pass
-
     return text
 
 def format_timestamp(timestamp_ms):
@@ -39,12 +38,412 @@ def format_timestamp(timestamp_ms):
         'hour': dt.hour
     }
 
-def load_messages(base_path):
-    """Load all messages from Facebook export"""
+def get_conversation_info(conv_path):
+    """Get basic info about a conversation"""
+    json_path = Path(conv_path) / 'message_1.json'
+
+    if not json_path.exists():
+        return None
+
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        participants = []
+        for p in data.get('participants', []):
+            name = fix_czech_chars(p.get('name', 'Unknown'))
+            participants.append(name)
+
+        message_count = len(data.get('messages', []))
+
+        # Get date range
+        messages = data.get('messages', [])
+        if messages:
+            first_msg = messages[-1]
+            last_msg = messages[0]
+            first_date = datetime.fromtimestamp(first_msg.get('timestamp_ms', 0) / 1000).strftime('%Y-%m-%d')
+            last_date = datetime.fromtimestamp(last_msg.get('timestamp_ms', 0) / 1000).strftime('%Y-%m-%d')
+        else:
+            first_date = 'N/A'
+            last_date = 'N/A'
+
+        # Count photos
+        photo_count = sum(1 for msg in messages if msg.get('photos'))
+
+        return {
+            'participants': participants,
+            'message_count': message_count,
+            'photo_count': photo_count,
+            'first_date': first_date,
+            'last_date': last_date,
+            'path': str(conv_path)
+        }
+    except Exception as e:
+        print(f"Error processing {conv_path}: {e}")
+        return None
+
+def build_conversation_index():
+    """Build an index of all conversations"""
+    print("🔍 Building conversation index...")
+    base_path = Path('fb_export/your_facebook_activity/messages')
+    conversations = []
+
+    folders_to_check = ['inbox', 'filtered_threads', 'archived_threads', 'message_requests', 'e2ee_cutover']
+
+    for folder in folders_to_check:
+        folder_path = base_path / folder
+        if not folder_path.exists():
+            continue
+
+        print(f"  Scanning {folder}...")
+        for conv_folder in folder_path.iterdir():
+            if conv_folder.is_dir():
+                info = get_conversation_info(conv_folder)
+                if info:
+                    info['category'] = folder
+                    info['id'] = len(conversations)
+                    conversations.append(info)
+
+    # Save index
+    with open('server_data/conversation_index.json', 'w', encoding='utf-8') as f:
+        json.dump(conversations, f, ensure_ascii=False, indent=2)
+
+    print(f"✅ Indexed {len(conversations)} conversations")
+    return conversations
+
+def load_conversation_index():
+    """Load or build conversation index"""
+    index_path = Path('server_data/conversation_index.json')
+
+    if not index_path.exists():
+        return build_conversation_index()
+
+    with open(index_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+def generate_index_html(conversations):
+    """Generate HTML for conversation list"""
+
+    # Group by category
+    categories = {}
+    for conv in conversations:
+        cat = conv['category']
+        if cat not in categories:
+            categories[cat] = []
+        categories[cat].append(conv)
+
+    # Sort each category by message count
+    for cat in categories:
+        categories[cat].sort(key=lambda x: x['message_count'], reverse=True)
+
+    html_content = '''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facebook Messenger Conversations</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 20px 0;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .search-box {
+            max-width: 600px;
+            margin: 30px auto;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 15px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .category {
+            background: white;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .category-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .conversations {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .conversation {
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .conversation:hover {
+            background: #f5f5f5;
+        }
+
+        .conversation-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            margin-right: 15px;
+            flex-shrink: 0;
+            font-size: 18px;
+        }
+
+        .conversation-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .conversation-name {
+            font-weight: 600;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .conversation-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .conversation-stats {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 5px;
+        }
+
+        .message-count {
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .date-range {
+            font-size: 0.8em;
+            color: #999;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: white;
+            font-size: 1.2em;
+        }
+
+        .photo-badge {
+            background: #4CAF50;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+        }
+
+        /* Avatar colors */
+        .avatar-0 { background: linear-gradient(135deg, #FF6B6B, #C44569); }
+        .avatar-1 { background: linear-gradient(135deg, #4ECDC4, #44A08D); }
+        .avatar-2 { background: linear-gradient(135deg, #45B7D1, #2196F3); }
+        .avatar-3 { background: linear-gradient(135deg, #96CEB4, #88D8B0); }
+        .avatar-4 { background: linear-gradient(135deg, #FFEAA7, #FDCB6E); }
+        .avatar-5 { background: linear-gradient(135deg, #DDA0DD, #BA55D3); }
+        .avatar-6 { background: linear-gradient(135deg, #F8B500, #FF6B6B); }
+        .avatar-7 { background: linear-gradient(135deg, #00C9FF, #92FE9D); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 Facebook Messenger Archive</h1>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-number">''' + str(len(conversations)) + '''</div>
+                    <div class="stat-label">Conversations</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">''' + f"{sum(c['message_count'] for c in conversations):,}" + '''</div>
+                    <div class="stat-label">Total Messages</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-number">''' + f"{sum(c.get('photo_count', 0) for c in conversations):,}" + '''</div>
+                    <div class="stat-label">Total Photos</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="search-box">
+            <input type="text" class="search-input" id="search" placeholder="Search conversations...">
+        </div>
+
+        <div id="conversation-list">'''
+
+    # Generate categories
+    category_order = ['inbox', 'e2ee_cutover', 'archived_threads', 'message_requests', 'filtered_threads']
+
+    for cat in category_order:
+        if cat not in categories:
+            continue
+
+        cat_display = cat.replace('_', ' ').title()
+        html_content += f'''
+        <div class="category">
+            <div class="category-header">📁 {cat_display} ({len(categories[cat])} conversations)</div>
+            <div class="conversations">'''
+
+        for conv in categories[cat]:
+            participants = ', '.join(conv['participants'][:2])
+            if len(conv['participants']) > 2:
+                participants += f" +{len(conv['participants'])-2}"
+
+            initials = ''.join([p[0].upper() for p in conv['participants'][0].split()[:2]])
+            avatar_class = f"avatar-{conv['id'] % 8}"
+
+            photo_badge = f'<span class="photo-badge">📷 {conv.get("photo_count", 0)}</span>' if conv.get('photo_count', 0) > 0 else ''
+
+            html_content += f'''
+                <div class="conversation" onclick="loadConversation({conv['id']})">
+                    <div class="conversation-avatar {avatar_class}">{initials}</div>
+                    <div class="conversation-info">
+                        <div class="conversation-name">{html.escape(participants)}</div>
+                        <div class="conversation-meta">
+                            <span>📅 {conv['first_date']} to {conv['last_date']}</span>
+                            {photo_badge}
+                        </div>
+                    </div>
+                    <div class="conversation-stats">
+                        <span class="message-count">{conv['message_count']} msgs</span>
+                    </div>
+                </div>'''
+
+        html_content += '''
+            </div>
+        </div>'''
+
+    html_content += '''
+        </div>
+    </div>
+
+    <script>
+        // Search functionality
+        document.getElementById('search').addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const conversations = document.querySelectorAll('.conversation');
+
+            conversations.forEach(conv => {
+                const name = conv.querySelector('.conversation-name').textContent.toLowerCase();
+                if (name.includes(searchTerm)) {
+                    conv.style.display = 'flex';
+                } else {
+                    conv.style.display = 'none';
+                }
+            });
+
+            // Update category visibility
+            document.querySelectorAll('.category').forEach(cat => {
+                const visibleConvs = cat.querySelectorAll('.conversation:not([style*="none"])');
+                cat.style.display = visibleConvs.length > 0 ? 'block' : 'none';
+            });
+        });
+
+        function loadConversation(id) {
+            window.location.href = '/conversation?id=' + id;
+        }
+    </script>
+</body>
+</html>'''
+
+    return html_content
+
+def escape_html_content(text):
+    """Escape HTML but preserve line breaks"""
+    if not text:
+        return ''
+    text = html.escape(text)
+    text = re.sub(
+        r'(https?://[^\s]+)',
+        r'<a href="\1" target="_blank">\1</a>',
+        text
+    )
+    return text
+
+def load_and_process_conversation(conv_path):
+    """Load and process messages from a conversation"""
     messages = []
     participants = set()
 
-    json_path = Path(base_path) / 'message_1.json'
+    json_path = Path(conv_path) / 'message_1.json'
 
     if not json_path.exists():
         raise FileNotFoundError(f"Message file not found: {json_path}")
@@ -80,7 +479,7 @@ def load_messages(base_path):
                 'reaction': reaction.get('reaction', '')
             })
 
-        # Check for links in content
+        # Check for links
         if processed_msg['content']:
             processed_msg['has_link'] = bool(re.search(r'https?://[^\s]+', processed_msg['content']))
         else:
@@ -93,49 +492,107 @@ def load_messages(base_path):
 
     return messages, list(participants)
 
-def generate_stats(messages):
-    """Generate statistics from messages"""
+def generate_conversation_html(messages, participants):
+    """Generate HTML for a single conversation"""
+
+    # Calculate stats
     stats = {
         'total': len(messages),
         'photos': sum(1 for m in messages if m['photos']),
         'videos': sum(1 for m in messages if m['videos']),
         'links': sum(1 for m in messages if m['has_link']),
-        'hourly': [0] * 24
+        'hourly': [0] * 24,
+        'first_date': messages[0]['iso_date'] if messages else '',
+        'last_date': messages[-1]['iso_date'] if messages else ''
     }
 
-    # Calculate hourly distribution
     for msg in messages:
         stats['hourly'][msg['hour']] += 1
 
-    # Get date range
-    if messages:
-        stats['first_date'] = messages[0]['iso_date']
-        stats['last_date'] = messages[-1]['iso_date']
+    # Generate hourly chart
+    max_hour = max(stats['hourly']) if max(stats['hourly']) > 0 else 1
+    hour_chart = ''
+    for i, count in enumerate(stats['hourly']):
+        height = (count / max_hour) * 100 if max_hour > 0 else 0
+        hour_chart += f'<div class="hour-bar" style="height: {height}%" data-tooltip="{i}:00 - {count} msgs"></div>'
 
-    return stats
+    # Generate messages HTML
+    messages_html = ''
+    last_date = None
 
-def escape_html_content(text):
-    """Escape HTML but preserve line breaks"""
-    if not text:
-        return ''
-    text = html.escape(text)
-    # Convert URLs to links
-    text = re.sub(
-        r'(https?://[^\s]+)',
-        r'<a href="\1" target="_blank">\1</a>',
-        text
-    )
-    return text
+    # Create sender color mapping
+    unique_senders = list(set(msg['sender'] for msg in messages))
+    sender_colors = {sender: idx % 4 for idx, sender in enumerate(unique_senders)}
 
-def generate_html(messages, participants, stats):
-    """Generate HTML file with ALL messages"""
+    for msg in messages:
+        # Add date separator
+        if msg['date'] != last_date:
+            messages_html += f'<div class="date-separator"><span>{msg["date"]}</span></div>\n'
+            last_date = msg['date']
 
+        # Create avatar initials
+        initials = ''.join([n[0].upper() for n in msg['sender'].split()[:2]])
+
+        # Determine sender class
+        sender_class = f'message-sender-{sender_colors[msg["sender"]]}'
+
+        # Start message
+        messages_html += f'''<div class="message {sender_class}" data-timestamp="{msg['timestamp_ms']}">
+    <div class="avatar">{initials}</div>
+    <div class="message-content">
+        <div class="message-header">
+            <span class="sender-name">{html.escape(msg['sender'])}</span>
+            <span class="message-time">{msg['full']}</span>
+        </div>'''
+
+        # Add message text
+        if msg['content']:
+            messages_html += f'\n        <div class="message-text">{escape_html_content(msg["content"])}</div>'
+
+        # Add photos
+        if msg['photos']:
+            messages_html += '\n        <div class="message-photos">'
+            for photo in msg['photos']:
+                photo_path = photo.get('uri', '')
+                # Remove 'data/' prefix if present for correct serving
+                if photo_path.startswith('fb_export/'):
+                    photo_path = photo_path
+                elif photo_path.startswith('your_facebook_activity'):
+                    photo_path = 'fb_export/' + photo_path
+                messages_html += f'\n            <img src="/{photo_path}" class="message-photo" onclick="openModal(this.src)" alt="Photo" loading="lazy">'
+            messages_html += '\n        </div>'
+
+        # Add videos
+        if msg['videos']:
+            for video in msg['videos']:
+                video_path = video.get('uri', '')
+                # Remove 'data/' prefix if present for correct serving
+                if video_path.startswith('fb_export/'):
+                    video_path = video_path
+                elif video_path.startswith('your_facebook_activity'):
+                    video_path = 'fb_export/' + video_path
+                messages_html += f'''
+        <video controls class="message-video">
+            <source src="/{video_path}" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>'''
+
+        # Add reactions
+        if msg['reactions']:
+            messages_html += '\n        <div class="reactions">'
+            for reaction in msg['reactions']:
+                messages_html += f'\n            <span class="reaction">{reaction["reaction"]} {html.escape(reaction["actor"])}</span>'
+            messages_html += '\n        </div>'
+
+        messages_html += '\n    </div>\n</div>\n'
+
+    # Load template from parse_messages_final.py and modify it
     html_template = '''<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Facebook Messenger Export - {participants}</title>
+    <title>Facebook Messenger - {participants}</title>
     <style>
         * {{
             margin: 0;
@@ -155,6 +612,24 @@ def generate_html(messages, participants, stats):
             display: grid;
             grid-template-columns: 320px 1fr;
             height: 100vh;
+        }}
+
+        /* Back button */
+        .back-button {{
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-bottom: 20px;
+            width: 100%;
+            transition: background 0.3s;
+        }}
+
+        .back-button:hover {{
+            background: rgba(255,255,255,0.3);
         }}
 
         /* Sidebar */
@@ -372,12 +847,20 @@ def generate_html(messages, participants, stats):
         }}
 
         /* Different colors for different people */
-        .message-petr .avatar {{
+        .message-sender-0 .avatar {{
             background: linear-gradient(135deg, #0084ff, #44bec7);
         }}
 
-        .message-lucie .avatar {{
+        .message-sender-1 .avatar {{
             background: linear-gradient(135deg, #fa3c4c, #d696bb);
+        }}
+
+        .message-sender-2 .avatar {{
+            background: linear-gradient(135deg, #00c851, #00ff87);
+        }}
+
+        .message-sender-3 .avatar {{
+            background: linear-gradient(135deg, #ff6900, #fcb900);
         }}
 
         .message-content {{
@@ -411,13 +894,23 @@ def generate_html(messages, participants, stats):
         }}
 
         /* Different background colors for messages */
-        .message-petr .message-text {{
+        .message-sender-0 .message-text {{
             background: #e3f2fd;
             color: #000;
         }}
 
-        .message-lucie .message-text {{
+        .message-sender-1 .message-text {{
             background: #fce4ec;
+            color: #000;
+        }}
+
+        .message-sender-2 .message-text {{
+            background: #e8f5e9;
+            color: #000;
+        }}
+
+        .message-sender-3 .message-text {{
+            background: #fff3e0;
             color: #000;
         }}
 
@@ -582,6 +1075,8 @@ def generate_html(messages, participants, stats):
     <div class="container">
         <!-- Sidebar -->
         <div class="sidebar">
+            <button class="back-button" onclick="window.location.href='/'">← Back to Conversations</button>
+
             <h1>Messenger Export</h1>
             <div class="participants">{participants}</div>
 
@@ -903,69 +1398,6 @@ def generate_html(messages, participants, stats):
 </body>
 </html>'''
 
-    # Generate hourly chart
-    max_hour = max(stats['hourly']) if max(stats['hourly']) > 0 else 1
-    hour_chart = ''
-    for i, count in enumerate(stats['hourly']):
-        height = (count / max_hour) * 100 if max_hour > 0 else 0
-        hour_chart += f'<div class="hour-bar" style="height: {height}%" data-tooltip="{i}:00 - {count} msgs"></div>'
-
-    # Generate messages HTML
-    messages_html = ''
-    last_date = None
-
-    for msg in messages:
-        # Add date separator if needed
-        if msg['date'] != last_date:
-            messages_html += f'<div class="date-separator"><span>{msg["date"]}</span></div>\n'
-            last_date = msg['date']
-
-        # Create avatar initials
-        initials = ''.join([n[0].upper() for n in msg['sender'].split()[:2]])
-
-        # Determine sender class (for coloring)
-        sender_class = 'message-petr' if 'Petr' in msg['sender'] or 'Simecek' in msg['sender'] else 'message-lucie'
-
-        # Start message
-        messages_html += f'''<div class="message {sender_class}" data-timestamp="{msg['timestamp_ms']}">
-    <div class="avatar">{initials}</div>
-    <div class="message-content">
-        <div class="message-header">
-            <span class="sender-name">{html.escape(msg['sender'])}</span>
-            <span class="message-time">{msg['full']}</span>
-        </div>'''
-
-        # Add message text
-        if msg['content']:
-            messages_html += f'\n        <div class="message-text">{escape_html_content(msg["content"])}</div>'
-
-        # Add photos
-        if msg['photos']:
-            messages_html += '\n        <div class="message-photos">'
-            for photo in msg['photos']:
-                photo_path = photo.get('uri', '')
-                messages_html += f'\n            <img src="{photo_path}" class="message-photo" onclick="openModal(this.src)" alt="Photo" loading="lazy">'
-            messages_html += '\n        </div>'
-
-        # Add videos
-        if msg['videos']:
-            for video in msg['videos']:
-                video_path = video.get('uri', '')
-                messages_html += f'''
-        <video controls class="message-video">
-            <source src="{video_path}" type="video/mp4">
-            Your browser does not support the video tag.
-        </video>'''
-
-        # Add reactions (with emoji support)
-        if msg['reactions']:
-            messages_html += '\n        <div class="reactions">'
-            for reaction in msg['reactions']:
-                messages_html += f'\n            <span class="reaction">{reaction["reaction"]} {html.escape(reaction["actor"])}</span>'
-            messages_html += '\n        </div>'
-
-        messages_html += '\n    </div>\n</div>\n'
-
     # Format the template
     html_content = html_template.format(
         participants=' & '.join(participants),
@@ -981,32 +1413,119 @@ def generate_html(messages, participants, stats):
 
     return html_content
 
+class MessengerHTTPHandler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        parsed_path = urlparse(self.path)
+
+        if parsed_path.path == '/':
+            # Serve conversation list
+            conversations = load_conversation_index()
+            html_content = generate_index_html(conversations)
+
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(html_content.encode('utf-8'))
+
+        elif parsed_path.path == '/conversation':
+            # Parse conversation ID
+            query_params = parse_qs(parsed_path.query)
+            conv_id = query_params.get('id', [None])[0]
+
+            if conv_id is None:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b"Missing conversation ID")
+                return
+
+            try:
+                conv_id = int(conv_id)
+                conversations = load_conversation_index()
+
+                if conv_id >= len(conversations):
+                    self.send_response(404)
+                    self.end_headers()
+                    self.wfile.write(b"Conversation not found")
+                    return
+
+                conv = conversations[conv_id]
+                print(f"Loading conversation: {conv['participants'][:2]}")
+
+                # Load and process conversation
+                messages, participants = load_and_process_conversation(conv['path'])
+                html_content = generate_conversation_html(messages, participants)
+
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html; charset=utf-8')
+                self.end_headers()
+                self.wfile.write(html_content.encode('utf-8'))
+
+            except Exception as e:
+                print(f"Error loading conversation: {e}")
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(f"Error: {str(e)}".encode('utf-8'))
+
+        elif parsed_path.path == '/rebuild':
+            # Force rebuild index
+            conversations = build_conversation_index()
+            self.send_response(302)
+            self.send_header('Location', '/')
+            self.end_headers()
+
+        elif parsed_path.path.startswith('/fb_export/') or parsed_path.path.startswith('/your_facebook_activity/'):
+            # Serve static files (photos, videos)
+            if parsed_path.path.startswith('/your_facebook_activity/'):
+                file_path = 'fb_export' + parsed_path.path
+            else:
+                file_path = parsed_path.path[1:]  # Remove leading /
+
+            if os.path.exists(file_path):
+                # Determine content type
+                if file_path.endswith(('.jpg', '.jpeg')):
+                    content_type = 'image/jpeg'
+                elif file_path.endswith('.png'):
+                    content_type = 'image/png'
+                elif file_path.endswith('.gif'):
+                    content_type = 'image/gif'
+                elif file_path.endswith('.mp4'):
+                    content_type = 'video/mp4'
+                else:
+                    content_type = 'application/octet-stream'
+
+                # Serve the file
+                try:
+                    with open(file_path, 'rb') as f:
+                        content = f.read()
+                    self.send_response(200)
+                    self.send_header('Content-type', content_type)
+                    self.send_header('Content-Length', str(len(content)))
+                    self.end_headers()
+                    self.wfile.write(content)
+                except Exception as e:
+                    print(f"Error serving file {file_path}: {e}")
+                    self.send_response(500)
+                    self.end_headers()
+            else:
+                print(f"File not found: {file_path}")
+                self.send_response(404)
+                self.end_headers()
+        else:
+            # Try to serve as static file
+            super().do_GET()
+
 def main():
-    # Path to the Facebook export
-    base_path = 'fb_export/your_facebook_activity/messages/e2ee_cutover/luciesperkova_10153589231783469'
+    PORT = 8000
 
-    print("Loading messages...")
-    messages, participants = load_messages(base_path)
-    print(f"Loaded {len(messages)} messages")
+    print(f"🚀 Starting Messenger Server on port {PORT}")
+    print(f"📱 Open http://localhost:{PORT} in your browser")
+    print(f"🔄 To rebuild index: http://localhost:{PORT}/rebuild")
 
-    print("Generating statistics...")
-    stats = generate_stats(messages)
-
-    # Generate HTML with ALL messages
-    print("Generating HTML with ALL messages...")
-    html_content = generate_html(messages, participants, stats)
-
-    # Save HTML file
-    output_file = 'server_data/messenger_export_final.html'
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(html_content)
-
-    print(f"HTML file generated: {output_file}")
-    print(f"✅ ALL {len(messages)} messages included")
-    print(f"✅ Search with result count and navigation")
-    print(f"✅ Date picker for navigation")
-    print(f"✅ Emoji reactions display")
-    print(f"Open http://localhost:8000/{output_file} in your browser")
+    with socketserver.TCPServer(("", PORT), MessengerHTTPHandler) as httpd:
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("\n👋 Server stopped")
 
 if __name__ == '__main__':
     main()

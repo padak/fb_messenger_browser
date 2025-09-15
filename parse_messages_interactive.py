@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 import html
 import re
+import sys
 
 def fix_czech_chars(text):
     """Fix Czech character encoding issues"""
@@ -38,6 +39,100 @@ def format_timestamp(timestamp_ms):
         'iso_date': dt.strftime('%Y-%m-%d'),
         'hour': dt.hour
     }
+
+def get_conversation_info(conv_path):
+    """Get basic info about a conversation"""
+    json_path = Path(conv_path) / 'message_1.json'
+
+    if not json_path.exists():
+        return None
+
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        participants = []
+        for p in data.get('participants', []):
+            name = fix_czech_chars(p.get('name', 'Unknown'))
+            participants.append(name)
+
+        message_count = len(data.get('messages', []))
+
+        # Get date range
+        messages = data.get('messages', [])
+        if messages:
+            first_msg = messages[-1]  # Messages are in reverse chronological order
+            last_msg = messages[0]
+            first_date = datetime.fromtimestamp(first_msg.get('timestamp_ms', 0) / 1000).strftime('%Y-%m-%d')
+            last_date = datetime.fromtimestamp(last_msg.get('timestamp_ms', 0) / 1000).strftime('%Y-%m-%d')
+        else:
+            first_date = 'N/A'
+            last_date = 'N/A'
+
+        return {
+            'participants': participants,
+            'message_count': message_count,
+            'first_date': first_date,
+            'last_date': last_date,
+            'path': conv_path
+        }
+    except Exception as e:
+        return None
+
+def list_all_conversations():
+    """List all conversations in the Facebook export"""
+    base_path = Path('fb_export/your_facebook_activity/messages')
+    conversations = []
+
+    # Check all main folders
+    folders_to_check = ['inbox', 'filtered_threads', 'archived_threads', 'message_requests', 'e2ee_cutover']
+
+    for folder in folders_to_check:
+        folder_path = base_path / folder
+        if not folder_path.exists():
+            continue
+
+        # Find all conversation folders
+        for conv_folder in folder_path.iterdir():
+            if conv_folder.is_dir():
+                info = get_conversation_info(conv_folder)
+                if info:
+                    info['category'] = folder
+                    conversations.append(info)
+
+    return conversations
+
+def display_conversations(conversations):
+    """Display conversations in a nice table format"""
+    print("\n" + "="*100)
+    print("FACEBOOK MESSENGER CONVERSATIONS")
+    print("="*100)
+
+    # Group by category
+    categories = {}
+    for conv in conversations:
+        cat = conv['category']
+        if cat not in categories:
+            categories[cat] = []
+        categories[cat].append(conv)
+
+    idx = 1
+    conv_index = {}
+
+    for category, convs in categories.items():
+        print(f"\n📁 {category.upper().replace('_', ' ')}")
+        print("-"*100)
+
+        for conv in sorted(convs, key=lambda x: x['message_count'], reverse=True):
+            participants = ', '.join(conv['participants'][:2])
+            if len(conv['participants']) > 2:
+                participants += f" +{len(conv['participants'])-2}"
+
+            print(f"{idx:3}. {participants[:50]:<50} | {conv['message_count']:>6} msgs | {conv['first_date']} to {conv['last_date']}")
+            conv_index[idx] = conv
+            idx += 1
+
+    return conv_index
 
 def load_messages(base_path):
     """Load all messages from Facebook export"""
@@ -127,7 +222,7 @@ def escape_html_content(text):
     )
     return text
 
-def generate_html(messages, participants, stats):
+def generate_html(messages, participants, stats, conv_name):
     """Generate HTML file with ALL messages"""
 
     html_template = '''<!DOCTYPE html>
@@ -372,12 +467,20 @@ def generate_html(messages, participants, stats):
         }}
 
         /* Different colors for different people */
-        .message-petr .avatar {{
+        .message-sender-0 .avatar {{
             background: linear-gradient(135deg, #0084ff, #44bec7);
         }}
 
-        .message-lucie .avatar {{
+        .message-sender-1 .avatar {{
             background: linear-gradient(135deg, #fa3c4c, #d696bb);
+        }}
+
+        .message-sender-2 .avatar {{
+            background: linear-gradient(135deg, #00c851, #00ff87);
+        }}
+
+        .message-sender-3 .avatar {{
+            background: linear-gradient(135deg, #ff6900, #fcb900);
         }}
 
         .message-content {{
@@ -411,13 +514,23 @@ def generate_html(messages, participants, stats):
         }}
 
         /* Different background colors for messages */
-        .message-petr .message-text {{
+        .message-sender-0 .message-text {{
             background: #e3f2fd;
             color: #000;
         }}
 
-        .message-lucie .message-text {{
+        .message-sender-1 .message-text {{
             background: #fce4ec;
+            color: #000;
+        }}
+
+        .message-sender-2 .message-text {{
+            background: #e8f5e9;
+            color: #000;
+        }}
+
+        .message-sender-3 .message-text {{
+            background: #fff3e0;
             color: #000;
         }}
 
@@ -910,9 +1023,13 @@ def generate_html(messages, participants, stats):
         height = (count / max_hour) * 100 if max_hour > 0 else 0
         hour_chart += f'<div class="hour-bar" style="height: {height}%" data-tooltip="{i}:00 - {count} msgs"></div>'
 
-    # Generate messages HTML
+    # Generate messages HTML with sender-based coloring
     messages_html = ''
     last_date = None
+
+    # Create a mapping of senders to indices for consistent coloring
+    unique_senders = list(set(msg['sender'] for msg in messages))
+    sender_colors = {sender: idx % 4 for idx, sender in enumerate(unique_senders)}
 
     for msg in messages:
         # Add date separator if needed
@@ -923,8 +1040,8 @@ def generate_html(messages, participants, stats):
         # Create avatar initials
         initials = ''.join([n[0].upper() for n in msg['sender'].split()[:2]])
 
-        # Determine sender class (for coloring)
-        sender_class = 'message-petr' if 'Petr' in msg['sender'] or 'Simecek' in msg['sender'] else 'message-lucie'
+        # Determine sender class for coloring
+        sender_class = f'message-sender-{sender_colors[msg["sender"]]}'
 
         # Start message
         messages_html += f'''<div class="message {sender_class}" data-timestamp="{msg['timestamp_ms']}">
@@ -973,8 +1090,8 @@ def generate_html(messages, participants, stats):
         total_photos=stats['photos'],
         total_videos=stats['videos'],
         total_links=stats['links'],
-        first_date=stats['first_date'],
-        last_date=stats['last_date'],
+        first_date=stats.get('first_date', 'N/A'),
+        last_date=stats.get('last_date', 'N/A'),
         hour_chart=hour_chart,
         messages_html=messages_html
     )
@@ -982,31 +1099,69 @@ def generate_html(messages, participants, stats):
     return html_content
 
 def main():
-    # Path to the Facebook export
-    base_path = 'fb_export/your_facebook_activity/messages/e2ee_cutover/luciesperkova_10153589231783469'
+    print("\n🔍 Scanning Facebook Messenger export...")
+    conversations = list_all_conversations()
 
-    print("Loading messages...")
-    messages, participants = load_messages(base_path)
-    print(f"Loaded {len(messages)} messages")
+    if not conversations:
+        print("❌ No conversations found in the export!")
+        return
 
-    print("Generating statistics...")
+    conv_index = display_conversations(conversations)
+
+    print("\n" + "="*100)
+    print("Enter the number of the conversation you want to export (or 'q' to quit):")
+
+    while True:
+        try:
+            choice = input("\n📝 Your choice: ").strip()
+
+            if choice.lower() == 'q':
+                print("👋 Goodbye!")
+                return
+
+            choice_num = int(choice)
+
+            if choice_num not in conv_index:
+                print("❌ Invalid number. Please try again.")
+                continue
+
+            selected = conv_index[choice_num]
+            break
+
+        except ValueError:
+            print("❌ Please enter a valid number or 'q' to quit.")
+
+    # Process the selected conversation
+    conv_path = selected['path']
+    conv_name = ' & '.join(selected['participants'][:2])
+
+    print(f"\n✅ Selected: {conv_name}")
+    print(f"📂 Path: {conv_path}")
+    print("⏳ Loading messages...")
+
+    messages, participants = load_messages(conv_path)
+    print(f"✅ Loaded {len(messages)} messages")
+
+    print("📊 Generating statistics...")
     stats = generate_stats(messages)
 
-    # Generate HTML with ALL messages
-    print("Generating HTML with ALL messages...")
-    html_content = generate_html(messages, participants, stats)
+    print("🔨 Generating HTML...")
+    html_content = generate_html(messages, participants, stats, conv_name)
 
-    # Save HTML file
-    output_file = 'server_data/messenger_export_final.html'
+    # Create output filename based on participants
+    safe_name = '_'.join(selected['participants'][:2]).replace(' ', '').lower()
+    output_file = f'server_data/export_{safe_name}.html'
+
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(html_content)
 
-    print(f"HTML file generated: {output_file}")
-    print(f"✅ ALL {len(messages)} messages included")
-    print(f"✅ Search with result count and navigation")
-    print(f"✅ Date picker for navigation")
-    print(f"✅ Emoji reactions display")
-    print(f"Open http://localhost:8000/{output_file} in your browser")
+    print(f"\n✅ HTML file generated: {output_file}")
+    print(f"📊 {len(messages)} messages included")
+    print(f"🔍 Search with result count and navigation")
+    print(f"📅 Date picker for navigation")
+    print(f"😀 Emoji reactions display")
+    print(f"\n🌐 Open http://localhost:8000/{output_file} in your browser")
+    print(f"💡 Don't forget to run: python3 server.py")
 
 if __name__ == '__main__':
     main()
