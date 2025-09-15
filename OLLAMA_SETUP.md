@@ -92,6 +92,6 @@ Once set up, the messenger server will automatically:
 
 ## Privacy Note
 
-✅ **100% Local**: All processing happens on your machine
-✅ **No Internet Required**: After model download
-✅ **Your Data Stays Private**: Nothing sent to external servers
+- ✅ **100% Local**: All processing happens on your machine
+- ✅ **No Internet Required**: After model download
+- ✅ **Your Data Stays Private**: Nothing sent to external servers
