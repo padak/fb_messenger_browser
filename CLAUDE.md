@@ -16,10 +16,11 @@ source .venv/bin/activate  # macOS/Linux
 # .venv\Scripts\activate  # Windows
 pip install -r requirements.txt
 
-# For semantic search (optional)
+# For semantic search and AI analysis (optional)
 brew install ollama  # macOS
 ollama serve  # Run in separate terminal
-ollama pull nomic-embed-text
+ollama pull nomic-embed-text  # For semantic search
+ollama pull llama3.2:3b  # For conversation summarization (2GB)
 ```
 
 ### Running the Application
@@ -65,18 +66,28 @@ Environment variables can be set in `.env` file:
 ### Key Components
 
 **messenger_server.py** - Main application
-- `MessengerHTTPHandler`: Routes requests (/, /conversation?id=X, /rebuild, /semantic-search, /embedding-status)
+- `MessengerHTTPHandler`: Routes requests (/, /conversation?id=X, /rebuild, /semantic-search, /embedding-status, /summarize)
 - `build_conversation_index()`: Scans all message folders and builds index
 - `load_and_process_conversation()`: Processes JSON messages for a specific conversation
-- `generate_conversation_html()`: Creates full HTML page with messages
+- `generate_conversation_html()`: Creates full HTML page with messages and AI analysis UI
 - `generate_embeddings_async()`: Background thread for embedding generation
 - `check_embeddings_exist()`: Check if embeddings are cached
+- `/summarize` endpoint: Handles AI summarization requests with various prompt types
 
-**semantic_search.py** - Semantic search engine
-- `SemanticSearchEngine`: Main class for semantic search
+**semantic_search.py** - Semantic search and AI analysis engine
+- `SemanticSearchEngine`: Main class for semantic search and summarization
+  - `llm_model`: Ollama LLM model for summarization (default: llama3.2:3b)
 - `embed_text()`: Generate embedding for single text using Ollama
 - `embed_messages()`: Generate/load embeddings for all messages
 - `search()`: Perform semantic search with cosine similarity
+- `summarize_messages()`: Generate AI summaries with multiple prompt types:
+  - `overview`: General conversation summary
+  - `topics`: Main topics extraction
+  - `timeline`: Chronological events
+  - `memory`: Find plans and decisions
+  - `custom`: User-defined prompts
+- `_format_messages_for_llm()`: Prepare messages for LLM context
+- `_build_prompt()`: Create prompts based on type and date filter
 - Progress tracking via `generation_progress` dictionary
 
 **Character Encoding Fix**

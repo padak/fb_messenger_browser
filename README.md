@@ -19,15 +19,55 @@ A beautiful web-based viewer for your Facebook Messenger data export with full s
 ## Prerequisites
 
 - Python 3.6 or higher
-- Facebook data export (downloaded from Facebook settings)
-- (Optional) Ollama for semantic search - [Installation Guide](OLLAMA_SETUP.md)
+- Facebook data export in JSON format (see [How to Download](#how-to-download-facebook-data) below)
+- (Optional) Ollama for semantic search and AI analysis - [Installation Guide](OLLAMA_SETUP.md)
+
+## How to Download Facebook Data
+
+### Quick Steps
+
+1. Go to Facebook Settings → Settings & Privacy → Settings
+2. Click "Download Your Information" (in Privacy section)
+3. Select **JSON format** (not HTML)
+4. Choose date range and select **Messages**
+5. Request download and wait for email notification
+6. Download the ZIP file when ready
+
+### Detailed Instructions
+
+1. **Access Download Tool**
+   - Open Facebook on your computer
+   - Click your profile icon → Settings & Privacy → Settings
+   - In the left sidebar, find and click "Download Your Information"
+
+2. **Configure Export Settings**
+   - Click "Request a Download"
+   - **Format**: Change from HTML to **JSON** (important!)
+   - **Date Range**: Select your desired timeframe
+   - **Your Information**: Check only "Messages" (or include other data if needed)
+   - **Media Quality**: Choose based on your needs (higher quality = larger file)
+
+3. **Download Process**
+   - Click "Create File"
+   - Wait for Facebook to prepare your data (can take hours to days)
+   - You'll receive an email and Facebook notification when ready
+   - Download the ZIP file (available for 4 days)
+
+### Important Notes
+
+- **JSON vs HTML**: Choose JSON format for this viewer to work properly
+- **End-to-End Encrypted Messages** (2024): If using encrypted chats, you may need to download them separately via messenger.com → Privacy & Safety → End-to-end encrypted chats → Download secure storage data
+- **Large Exports**: For many years of messages, the file can be several GB
+- **Privacy**: The export contains sensitive personal data - handle with care
+
+For more details, see [Facebook's official guide](https://www.facebook.com/help/212802592074644).
 
 ## Installation
 
 1. Clone or download this repository:
 ```bash
-git clone https://github.com/yourusername/fb_mess.git
-cd fb_mess
+git clone https://github.com/padak/fb_messenger_browser.git
+cd fb_messenger_browser
 ```
 
 2. Set up Python virtual environment and install dependencies:
