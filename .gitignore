@@ -1,0 +1,9 @@
+# Ignore the .playwright-mcp directory
+.playwright-mcp/
+
+# Ignore the data folder
+data/
+
+# Ignore the messages_data.json file
+messages_data.json
+messenger_export_final.html
