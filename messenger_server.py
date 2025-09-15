@@ -2552,7 +2552,7 @@ class MessengerHTTPHandler(http.server.SimpleHTTPRequestHandler):
             super().do_GET()
 
 def main():
-    PORT = 8000
+    # PORT is already defined globally from environment variable on line 18
 
     print(f"🚀 Starting Messenger Server on port {PORT}")
     print(f"📱 Open http://localhost:{PORT} in your browser")
