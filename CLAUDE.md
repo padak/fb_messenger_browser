@@ -8,19 +8,31 @@ This is a Facebook Messenger Export Viewer - a web-based tool for browsing and s
 
 ## Commands
 
+### Setting Up the Environment
+```bash
+# IMPORTANT: Always use virtual environment for dependencies
+python -m venv .venv
+source .venv/bin/activate  # macOS/Linux
+# .venv\Scripts\activate  # Windows
+pip install -r requirements.txt
+
+# For semantic search (optional)
+brew install ollama  # macOS
+ollama serve  # Run in separate terminal
+ollama pull nomic-embed-text
+```
+
 ### Running the Application
 ```bash
-# Start the main server (recommended)
-python3 messenger_server.py
+# Activate virtual environment first!
+source .venv/bin/activate
+
+# Start the main server
+python messenger_server.py
 # Opens at http://localhost:8000
 
-# Alternative: Process single conversation (legacy)
-python3 parse_messages_final.py
-# Generates messenger_export_final.html
-
-# Interactive CLI version
-python3 parse_messages_interactive.py
-# Select conversation number from list
+# Test semantic search
+python test_semantic_search.py
 ```
 
 ### Common Operations
@@ -32,21 +44,40 @@ curl http://localhost:8000/rebuild
 lsof -ti:8000 | xargs kill -9
 ```
 
+## Configuration
+
+Environment variables can be set in `.env` file:
+- `SEMANTIC_SEARCH_ENABLED` - Enable/disable semantic search (default: true)
+- `OLLAMA_MODEL` - Model for embeddings (default: nomic-embed-text)
+- `PORT` - Server port (default: 8000)
+- `MIN_MESSAGES_FOR_PROGRESS` - Show progress for large conversations (default: 200)
+- `EMBEDDINGS_CACHE_DIR` - Cache directory (default: server_data/embeddings)
+
 ## Architecture
 
 ### Data Flow
 1. **Facebook Export** → placed in `fb_export/your_facebook_activity/messages/`
 2. **Index Generation** → `build_conversation_index()` scans all folders and creates `server_data/conversation_index.json`
 3. **Dynamic Loading** → Server loads conversations on-demand when user clicks
-4. **HTML Generation** → Python generates complete HTML with embedded JavaScript
+4. **Embedding Generation** → Background thread generates embeddings for semantic search
+5. **HTML Generation** → Python generates complete HTML with embedded JavaScript
 
 ### Key Components
 
 **messenger_server.py** - Main application
-- `MessengerHTTPHandler`: Routes requests (/, /conversation?id=X, /rebuild)
+- `MessengerHTTPHandler`: Routes requests (/, /conversation?id=X, /rebuild, /semantic-search, /embedding-status)
 - `build_conversation_index()`: Scans all message folders and builds index
 - `load_and_process_conversation()`: Processes JSON messages for a specific conversation
 - `generate_conversation_html()`: Creates full HTML page with messages
+- `generate_embeddings_async()`: Background thread for embedding generation
+- `check_embeddings_exist()`: Check if embeddings are cached
+
+**semantic_search.py** - Semantic search engine
+- `SemanticSearchEngine`: Main class for semantic search
+- `embed_text()`: Generate embedding for single text using Ollama
+- `embed_messages()`: Generate/load embeddings for all messages
+- `search()`: Perform semantic search with cosine similarity
+- Progress tracking via `generation_progress` dictionary
 
 **Character Encoding Fix**
 - `fix_czech_chars()`: Fixes mojibake by re-encoding latin-1 to UTF-8
@@ -94,8 +125,20 @@ Generated index format in `server_data/conversation_index.json`:
 
 ## Important Considerations
 
-- **Conversation paths**: Hardcoded in `parse_messages_final.py` to `fb_export/your_facebook_activity/messages/e2ee_cutover/luciesperkova_10153589231783469`
-- **Port**: Server runs on port 8000 (hardcoded)
+- **Virtual Environment**: ALWAYS use `.venv` for Python dependencies to avoid system conflicts
+- **Port**: Server runs on port 8000 (configurable via `.env`)
 - **Index caching**: `server_data/conversation_index.json` must be deleted or use `/rebuild` to refresh
+- **Embedding caching**: Stored in `server_data/embeddings/` per conversation
 - **Message ordering**: Facebook exports messages in reverse chronological order; code sorts them
 - **Media files**: Server serves photos/videos from original export paths
+- **Background threads**: Embedding generation runs in daemon threads
+- **Progress tracking**: Only shown for conversations with 200+ messages (configurable)
+
+## Key Learnings
+
+1. **Always use virtual environments** - Dependencies should be installed in `.venv`, not globally
+2. **Async processing for UX** - Long operations should run in background with progress feedback
+3. **Smart defaults** - Show progress only when needed (large conversations)
+4. **Configuration via .env** - Keep settings separate from code
+5. **Caching is crucial** - Embeddings take time to generate but can be cached indefinitely
+6. **Privacy first** - All processing local, even AI features use local Ollama models

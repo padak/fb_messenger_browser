@@ -6,17 +6,20 @@ A beautiful web-based viewer for your Facebook Messenger data export with full s
 
 - 📱 **Complete Conversation Browser**: Browse all your Facebook Messenger conversations in one place
 - 🔍 **Advanced Search**: Search within conversations with result count and navigation
+- 🧠 **Semantic Search** (NEW): AI-powered search that understands meaning in Czech and English
 - 📅 **Date Navigation**: Jump to any date with a date picker or quick buttons (Last Month, 3 Months, etc.)
 - 🖼️ **Media Support**: View photos and videos inline
 - 😀 **Emoji Reactions**: See all reactions on messages
 - 📊 **Statistics**: View message counts, photos, videos, and hourly activity patterns
 - 🎨 **Beautiful UI**: Modern, responsive design with color-coded messages
 - 🚀 **Fast Performance**: Efficient loading and rendering of thousands of messages
+- 🔒 **100% Private**: All processing happens locally on your machine
 
 ## Prerequisites
 
 - Python 3.6 or higher
 - Facebook data export (downloaded from Facebook settings)
+- (Optional) Ollama for semantic search - [Installation Guide](OLLAMA_SETUP.md)
 
 ## Installation
 
@@ -26,7 +29,21 @@ git clone https://github.com/yourusername/fb_mess.git
 cd fb_mess
 ```
 
-2. Place your Facebook export in the `fb_export` folder:
+2. Set up Python virtual environment and install dependencies:
+```bash
+# Create virtual environment
+python -m venv .venv
+
+# Activate it (macOS/Linux)
+source .venv/bin/activate
+# Activate it (Windows)
+# .venv\Scripts\activate
+
+# Install dependencies (make sure .venv is activated!)
+pip install -r requirements.txt
+```
+
+3. Place your Facebook export in the `fb_export` folder:
 ```bash
 fb_export/
 └── your_facebook_activity/
@@ -37,13 +54,30 @@ fb_export/
         └── ...
 ```
 
+4. (Optional) Set up Ollama for semantic search:
+```bash
+# Install Ollama
+brew install ollama  # macOS
+
+# Start Ollama service
+ollama serve
+
+# Pull embedding model
+ollama pull nomic-embed-text
+```
+See [OLLAMA_SETUP.md](OLLAMA_SETUP.md) for detailed instructions.
+
 ## Usage
 
 ### Quick Start
 
-1. Start the server:
+1. Start the server (make sure virtual environment is activated):
 ```bash
-python3 messenger_server.py
+# Activate virtual environment first!
+source .venv/bin/activate
+
+# Then start the server
+python messenger_server.py
 ```
 
 2. Open your browser and navigate to:
@@ -63,10 +97,15 @@ http://localhost:8000
 
 #### Conversation View
 - **Search Messages**: Search with highlighting and "Result X of Y" navigation
+- **Semantic Search**: Toggle between text and AI-powered semantic search
+  - Understands meaning, not just keywords
+  - Works across Czech and English
+  - Find related topics even with different words
 - **Date Picker**: Jump to any date in the conversation
 - **Quick Dates**: Jump to Last Month, 3 Months, 6 Months, or 1 Year ago
 - **Filters**: Filter by All, Photos, Videos, or Links
 - **Activity Chart**: See hourly message distribution
+- **Progress Tracking**: See real-time progress for embedding generation on large conversations
 - **Back Button**: Return to conversation list
 
 ### Advanced Options
@@ -77,25 +116,44 @@ If you add new data or want to refresh the conversation list:
 http://localhost:8000/rebuild
 ```
 
-#### Use Specific Conversation (Legacy)
-To process a single conversation directly:
+
+## Configuration
+
+Create a `.env` file to customize settings (optional):
 ```bash
-python3 parse_messages_final.py
+# Enable/disable semantic search
+SEMANTIC_SEARCH_ENABLED=true
+
+# Ollama model for embeddings
+OLLAMA_MODEL=nomic-embed-text
+
+# Server port
+PORT=8000
+
+# Show progress modal for conversations with this many messages
+MIN_MESSAGES_FOR_PROGRESS=200
+
+# Cache directory for embeddings
+EMBEDDINGS_CACHE_DIR=server_data/embeddings
 ```
-This will generate `messenger_export_final.html` for the hardcoded conversation path.
 
 ## File Structure
 
 ```
 fb_mess/
 ├── messenger_server.py          # Main server with UI
-├── parse_messages_final.py      # Single conversation processor
-├── parse_messages_interactive.py # Interactive CLI version
+├── semantic_search.py           # Semantic search engine with Ollama
+├── requirements.txt             # Python dependencies
+├── .env                        # Configuration (optional)
+├── OLLAMA_SETUP.md             # Ollama installation guide
+├── test_semantic_search.py     # Test suite for semantic search
 ├── fb_export/                   # Your Facebook export goes here (gitignored)
 │   └── your_facebook_activity/
 ├── server_data/                 # Generated files (gitignored)
 │   ├── conversation_index.json  # Conversation index
+│   ├── embeddings/             # Cached embeddings for semantic search
 │   └── *.html                   # Generated HTML files
+├── .venv/                      # Python virtual environment (gitignored)
 └── README.md                   # This file
 ```
 
@@ -105,7 +163,11 @@ fb_mess/
 - **Backend**: Python HTTP server with dynamic HTML generation
 - **Frontend**: Pure JavaScript (no frameworks required)
 - **Data Processing**: Automatic Czech character encoding fixes
-- **Caching**: Conversation index cached in JSON for fast loading
+- **Semantic Search**: Ollama-powered embeddings with multilingual support
+- **Caching**:
+  - Conversation index cached in JSON for fast loading
+  - Embeddings cached per conversation to avoid regeneration
+- **Async Processing**: Background embedding generation for large conversations
 
 ### Encoding Fixes
 The viewer automatically fixes common encoding issues in Facebook exports, particularly for Czech characters (č, š, ž, etc.) that may appear as mojibake (Ã¡, Ä\x8d, etc.).
@@ -115,6 +177,9 @@ The viewer automatically fixes common encoding issues in Facebook exports, parti
 - Lazy loading of images
 - Optimized search with real-time highlighting
 - Fast conversation switching
+- Background embedding generation doesn't block UI
+- Progress tracking for large conversations (200+ messages)
+- Cached embeddings for instant semantic search after first generation
 
 ## Troubleshooting
 
@@ -125,7 +190,10 @@ If you get an "Address already in use" error:
 lsof -ti:8000 | xargs kill -9
 
 # Then restart the server
-python3 messenger_server.py
+# Activate virtual environment first!
+source .venv/bin/activate
+
+python messenger_server.py
 ```
 
 ### Missing Conversations
@@ -136,13 +204,27 @@ If some conversations don't appear:
 ### Character Encoding Issues
 The viewer automatically fixes most encoding issues. If you still see strange characters, ensure your export is complete and not corrupted.
 
+### Semantic Search Not Working
+If semantic search toggle doesn't appear:
+1. Check Ollama is installed: `ollama --version`
+2. Ensure Ollama is running: `ollama serve`
+3. Pull the model: `ollama pull nomic-embed-text`
+4. Restart the messenger server
+5. Check console for "✅ Semantic search is available" message
+
+### Slow Embedding Generation
+First-time embedding generation can take 5-10 minutes for large conversations:
+- Progress is shown for conversations with 200+ messages
+- Embeddings are cached - subsequent searches are instant
+- You can adjust `MIN_MESSAGES_FOR_PROGRESS` in `.env`
+
 ## Privacy Note
 
-This tool runs entirely locally on your computer. Your messages never leave your machine and no data is sent to any external servers.
+This tool runs entirely locally on your computer. Your messages never leave your machine and no data is sent to any external servers. Even the AI-powered semantic search uses local Ollama models - your data remains 100% private.
 
 ## License
 
-MIT License - feel free to use and modify as needed.
+Apache License 2.0 - See [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
