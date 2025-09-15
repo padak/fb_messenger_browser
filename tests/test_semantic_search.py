@@ -5,6 +5,12 @@ Test script for semantic search functionality.
 
 import json
 import numpy as np
+import sys
+import os
+
+# Add parent directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from semantic_search import SemanticSearchEngine, check_ollama_installation
 from datetime import datetime
 

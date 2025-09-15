@@ -32,8 +32,14 @@ source .venv/bin/activate
 python messenger_server.py
 # Opens at http://localhost:8000
 
-# Test semantic search
-python test_semantic_search.py
+# Run all tests
+python tests/run_tests.py
+
+# Run specific test module
+python tests/run_tests.py test_messenger_server
+
+# Test semantic search functionality
+python tests/test_semantic_search.py
 ```
 
 ### Common Operations
@@ -54,6 +60,34 @@ Environment variables can be set in `.env` file:
 - `MIN_MESSAGES_FOR_PROGRESS` - Show progress for large conversations (default: 200)
 - `EMBEDDINGS_CACHE_DIR` - Cache directory (default: server_data/embeddings)
 
+## File Organization
+
+```
+fb_mess/
+├── Core Files
+│   ├── messenger_server.py      # Main server with UI
+│   ├── semantic_search.py       # Semantic search engine
+│   └── requirements.txt         # Python dependencies
+├── Configuration
+│   ├── .env                     # Local configuration
+│   └── .env.dist               # Configuration template
+├── docs/                        # Documentation
+│   ├── OLLAMA_SETUP.md         # Ollama installation guide
+│   └── TODO_IMPROVEMENTS.md    # Issues and improvements
+├── scripts/                     # Utility scripts
+│   └── messenger_config.py     # Advanced configuration module
+├── tests/                       # Test suite
+│   ├── __init__.py
+│   ├── test_semantic_search.py # Integration tests
+│   ├── test_messenger_server.py # Server unit tests
+│   ├── test_semantic_search_unit.py # Search unit tests
+│   ├── conftest.py            # Test fixtures
+│   └── run_tests.py           # Test runner
+├── fb_export/                   # Facebook data (gitignored)
+├── server_data/                 # Generated files (gitignored)
+└── .venv/                      # Virtual environment (gitignored)
+```
+
 ## Architecture
 
 ### Data Flow
@@ -67,6 +101,8 @@ Environment variables can be set in `.env` file:
 
 **messenger_server.py** - Main application
 - `MessengerHTTPHandler`: Routes requests (/, /conversation?id=X, /rebuild, /semantic-search, /embedding-status, /summarize)
+- `normalize_media_path()`: Normalize Facebook export media paths (fixes duplication)
+- `fix_czech_chars()`: Fix Czech character encoding issues
 - `build_conversation_index()`: Scans all message folders and builds index
 - `load_and_process_conversation()`: Processes JSON messages for a specific conversation
 - `generate_conversation_html()`: Creates full HTML page with messages and AI analysis UI
@@ -145,6 +181,50 @@ Generated index format in `server_data/conversation_index.json`:
 - **Background threads**: Embedding generation runs in daemon threads
 - **Progress tracking**: Only shown for conversations with 200+ messages (configurable)
 
+## Testing
+
+### Running Tests
+```bash
+# Activate virtual environment
+source .venv/bin/activate
+
+# Run all tests
+python tests/run_tests.py
+
+# Run with coverage
+python tests/run_tests.py --coverage
+
+# Run specific test module
+python tests/run_tests.py test_messenger_server
+```
+
+### Test Coverage
+- **Unit Tests**: 32+ tests covering core functionality
+- **Integration Tests**: Semantic search end-to-end testing
+- **Test Fixtures**: Mock data, Ollama responses, HTTP handlers
+- **Areas Covered**:
+  - Character encoding fixes
+  - Media path normalization
+  - Conversation processing
+  - HTML generation
+  - Semantic search
+  - Caching mechanisms
+  - Environment variables
+
+## Recent Improvements
+
+### Code Quality
+1. **Fixed PORT environment variable bug** - Was hardcoded in main(), now reads from env
+2. **Fixed color contrast issues** - White text on dark backgrounds for better readability
+3. **Extracted duplicate code** - Created `normalize_media_path()` to eliminate duplication
+4. **Comprehensive test suite** - Added 70+ unit tests with fixtures
+
+### File Organization
+1. **Moved documentation to `docs/`** - OLLAMA_SETUP.md, TODO_IMPROVEMENTS.md
+2. **Created `scripts/` folder** - For utility scripts like messenger_config.py
+3. **Organized tests in `tests/`** - All test files with proper structure
+4. **Updated README** - Reflects new file organization
+
 ## Key Learnings
 
 1. **Always use virtual environments** - Dependencies should be installed in `.venv`, not globally
@@ -153,3 +233,5 @@ Generated index format in `server_data/conversation_index.json`:
 4. **Configuration via .env** - Keep settings separate from code
 5. **Caching is crucial** - Embeddings take time to generate but can be cached indefinitely
 6. **Privacy first** - All processing local, even AI features use local Ollama models
+7. **Test everything** - Comprehensive test suite ensures code quality
+8. **Fix inconsistencies early** - Address hardcoded values, color issues, code duplication

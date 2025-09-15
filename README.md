@@ -20,7 +20,7 @@ A beautiful web-based viewer for your Facebook Messenger data export with full s
 
 - Python 3.6 or higher
 - Facebook data export in JSON format (see [How to Download](#how-to-download-facebook-data) below)
-- (Optional) Ollama for semantic search and AI analysis - [Installation Guide](OLLAMA_SETUP.md)
+- (Optional) Ollama for semantic search and AI analysis - [Installation Guide](docs/OLLAMA_SETUP.md)
 
 ## How to Download Facebook Data
 
@@ -109,7 +109,7 @@ ollama pull nomic-embed-text
 # Pull LLM model for conversation analysis (2GB)
 ollama pull llama3.2:3b
 ```
-See [OLLAMA_SETUP.md](OLLAMA_SETUP.md) for detailed instructions.
+See [docs/OLLAMA_SETUP.md](docs/OLLAMA_SETUP.md) for detailed instructions.
 
 ## Usage
 
@@ -195,14 +195,23 @@ fb_mess/
 ├── semantic_search.py           # Semantic search engine with Ollama
 ├── requirements.txt             # Python dependencies
 ├── .env                        # Configuration (optional)
-├── OLLAMA_SETUP.md             # Ollama installation guide
-├── test_semantic_search.py     # Test suite for semantic search
-├── fb_export/                   # Your Facebook export goes here (gitignored)
+├── .env.dist                   # Configuration template
+├── docs/                       # Documentation
+│   ├── OLLAMA_SETUP.md        # Ollama installation guide
+│   └── TODO_IMPROVEMENTS.md    # Code improvements and issues to fix
+├── scripts/                    # Utility scripts
+│   └── messenger_config.py    # Advanced configuration module (future use)
+├── tests/                      # Test suite
+│   ├── test_semantic_search.py # Integration tests for semantic search
+│   ├── test_messenger_server.py # Unit tests for server
+│   ├── test_semantic_search_unit.py # Unit tests for semantic search
+│   ├── conftest.py            # Test fixtures and configuration
+│   └── run_tests.py           # Test runner
+├── fb_export/                  # Your Facebook export goes here (gitignored)
 │   └── your_facebook_activity/
-├── server_data/                 # Generated files (gitignored)
-│   ├── conversation_index.json  # Conversation index
-│   ├── embeddings/             # Cached embeddings for semantic search
-│   └── *.html                   # Generated HTML files
+├── server_data/                # Generated files (gitignored)
+│   ├── conversation_index.json # Conversation index
+│   └── embeddings/             # Cached embeddings for semantic search
 ├── .venv/                      # Python virtual environment (gitignored)
 └── README.md                   # This file
 ```

@@ -72,6 +72,16 @@ def format_timestamp(timestamp_ms):
         'hour': dt.hour
     }
 
+def normalize_media_path(path):
+    """Normalize Facebook export media paths to avoid duplication"""
+    if not path:
+        return path
+    if path.startswith('fb_export/'):
+        return path
+    elif path.startswith('your_facebook_activity'):
+        return 'fb_export/' + path
+    return path
+
 def get_conversation_info(conv_path):
     """Get basic info about a conversation"""
     json_path = Path(conv_path) / 'message_1.json'
@@ -416,7 +426,7 @@ def generate_index_html(conversations):
 
         .photo-badge {
             background: var(--accent-green);
-            color: #0a0a0a;
+            color: #ffffff;
             padding: 4px 8px;
             border-radius: var(--radius-sm);
             font-size: 12px;
@@ -716,24 +726,14 @@ def generate_conversation_html(messages, participants, conversation_id=None):
         if msg['photos']:
             messages_html += '\n        <div class="message-photos">'
             for photo in msg['photos']:
-                photo_path = photo.get('uri', '')
-                # Remove 'data/' prefix if present for correct serving
-                if photo_path.startswith('fb_export/'):
-                    photo_path = photo_path
-                elif photo_path.startswith('your_facebook_activity'):
-                    photo_path = 'fb_export/' + photo_path
+                photo_path = normalize_media_path(photo.get('uri', ''))
                 messages_html += f'\n            <img src="/{photo_path}" class="message-photo" onclick="openModal(this.src)" alt="Photo" loading="lazy">'
             messages_html += '\n        </div>'
 
         # Add videos
         if msg['videos']:
             for video in msg['videos']:
-                video_path = video.get('uri', '')
-                # Remove 'data/' prefix if present for correct serving
-                if video_path.startswith('fb_export/'):
-                    video_path = video_path
-                elif video_path.startswith('your_facebook_activity'):
-                    video_path = 'fb_export/' + video_path
+                video_path = normalize_media_path(video.get('uri', ''))
                 messages_html += f'''
         <video controls class="message-video">
             <source src="/{video_path}" type="video/mp4">
@@ -1422,7 +1422,7 @@ def generate_conversation_html(messages, participants, conversation_id=None):
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0,0,0,0.8);
-            color: #0a0a0a;
+            color: #ffffff;
             padding: 4px 8px;
             border-radius: 4px;
             font-size: 11px;
@@ -1510,7 +1510,7 @@ def generate_conversation_html(messages, participants, conversation_id=None):
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #0a0a0a;
+            color: #ffffff;
             font-weight: bold;
         }}
 
