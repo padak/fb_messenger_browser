@@ -1,3 +1,6 @@
+.venv/
+.env
+
 # Ignore the .playwright-mcp directory
 .playwright-mcp/
 

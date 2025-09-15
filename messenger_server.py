@@ -3,11 +3,45 @@ import http.server
 import socketserver
 import json
 import os
+import threading
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 import html
 import re
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Configuration from environment
+PORT = int(os.getenv('PORT', 8000))
+MIN_MESSAGES_FOR_PROGRESS = int(os.getenv('MIN_MESSAGES_FOR_PROGRESS', 200))
+
+# Global flag for semantic search availability
+SEMANTIC_SEARCH_AVAILABLE = False
+semantic_engine = None
+
+# Check if semantic search is enabled in environment
+if os.getenv('SEMANTIC_SEARCH_ENABLED', 'true').lower() == 'true':
+    try:
+        from semantic_search import SemanticSearchEngine, check_ollama_installation
+        if check_ollama_installation():
+            print("✅ Semantic search is available (Ollama detected)")
+            SEMANTIC_SEARCH_AVAILABLE = True
+            ollama_model = os.getenv('OLLAMA_MODEL', 'nomic-embed-text')
+            cache_dir = os.getenv('EMBEDDINGS_CACHE_DIR', 'server_data/embeddings')
+            semantic_engine = SemanticSearchEngine(model_name=ollama_model, cache_dir=cache_dir)
+        else:
+            print("⚠️ Semantic search disabled (Ollama not running)")
+            print("   To enable: 1) Install Ollama  2) Run 'ollama serve'  3) Pull model with 'ollama pull nomic-embed-text'")
+    except ImportError as e:
+        print(f"⚠️ Semantic search disabled (missing dependencies: {e})")
+        print("   To enable: pip install -r requirements.txt")
+    except Exception as e:
+        print(f"⚠️ Semantic search disabled (error: {e})")
+else:
+    print("ℹ️ Semantic search disabled via environment variable")
 
 # Import parsing functions from our existing module
 def fix_czech_chars(text):
@@ -492,7 +526,56 @@ def load_and_process_conversation(conv_path):
 
     return messages, list(participants)
 
-def generate_conversation_html(messages, participants):
+def check_embeddings_exist(conversation_id):
+    """Check if embeddings exist for a conversation without generating them."""
+    if not SEMANTIC_SEARCH_AVAILABLE or not semantic_engine:
+        return False
+
+    cache_path = semantic_engine._get_cache_path(conversation_id)
+    return cache_path.exists()
+
+def get_or_generate_embeddings(messages, conversation_id):
+    """Get or generate embeddings for messages if semantic search is available."""
+    if not SEMANTIC_SEARCH_AVAILABLE or not semantic_engine:
+        return None
+
+    try:
+        # Generate embeddings (will use cache if available)
+        embeddings = semantic_engine.embed_messages(messages, conversation_id)
+        return embeddings
+    except Exception as e:
+        print(f"Error generating embeddings: {e}")
+        return None
+
+def generate_embeddings_async(messages, conversation_id):
+    """Generate embeddings in a background thread."""
+    if not SEMANTIC_SEARCH_AVAILABLE or not semantic_engine:
+        return
+
+    def generate():
+        try:
+            print(f"🔄 Starting background embedding generation for conversation {conversation_id}")
+            semantic_engine.embed_messages(messages, conversation_id)
+            print(f"✅ Completed embedding generation for conversation {conversation_id}")
+        except Exception as e:
+            print(f"❌ Error generating embeddings in background: {e}")
+
+    thread = threading.Thread(target=generate, daemon=True)
+    thread.start()
+
+def perform_semantic_search(query, messages, embeddings, top_k=20):
+    """Perform semantic search on messages."""
+    if not SEMANTIC_SEARCH_AVAILABLE or not semantic_engine or not embeddings:
+        return []
+
+    try:
+        results = semantic_engine.search(query, messages, embeddings, top_k=top_k)
+        return results
+    except Exception as e:
+        print(f"Error in semantic search: {e}")
+        return []
+
+def generate_conversation_html(messages, participants, conversation_id=None):
     """Generate HTML for a single conversation"""
 
     # Calculate stats
@@ -716,6 +799,33 @@ def generate_conversation_html(messages, participants):
             background: rgba(255,255,255,0.1);
             padding: 15px;
             border-radius: 10px;
+        }}
+
+        .search-toggle {{
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+            align-items: center;
+        }}
+
+        .search-toggle-btn {{
+            padding: 6px 12px;
+            border: none;
+            border-radius: 15px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.3s;
+        }}
+
+        .search-toggle-btn.active {{
+            background: rgba(255,255,255,0.4);
+            font-weight: bold;
+        }}
+
+        .search-toggle-btn:hover {{
+            background: rgba(255,255,255,0.3);
         }}
 
         .search-input {{
@@ -1047,6 +1157,80 @@ def generate_conversation_html(messages, participants):
             cursor: pointer;
         }}
 
+        /* Progress modal */
+        .progress-modal {{
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }}
+
+        .progress-modal.active {{
+            display: flex;
+        }}
+
+        .progress-content {{
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            max-width: 500px;
+        }}
+
+        .progress-title {{
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #333;
+        }}
+
+        .progress-bar-container {{
+            width: 100%;
+            height: 30px;
+            background: #f0f0f0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 20px 0;
+        }}
+
+        .progress-bar {{
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }}
+
+        .progress-message {{
+            color: #666;
+            margin-top: 20px;
+            font-size: 14px;
+        }}
+
+        .progress-spinner {{
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }}
+
+        @keyframes spin {{
+            0% {{ transform: rotate(0deg); }}
+            100% {{ transform: rotate(360deg); }}
+        }}
+
         /* Back to top */
         .back-to-top {{
             position: fixed;
@@ -1112,6 +1296,7 @@ def generate_conversation_html(messages, participants):
 
             <div class="search-box">
                 <input type="text" class="search-input" id="search" placeholder="Search messages...">
+                {semantic_toggle}
                 <div class="search-info" id="search-info"></div>
                 <div class="search-nav" id="search-nav" style="display: none;">
                     <button onclick="navigateSearch('prev')" id="prev-btn">← Previous</button>
@@ -1145,6 +1330,21 @@ def generate_conversation_html(messages, participants):
         <img class="modal-content" id="modal-image">
     </div>
 
+    <!-- Progress Modal -->
+    <div class="progress-modal" id="progress-modal">
+        <div class="progress-content">
+            <div class="progress-title">🧠 Generating Semantic Search Index</div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+            <div class="progress-message" id="progress-message">
+                Preparing embeddings for semantic search...<br>
+                This is a one-time process that may take a few minutes.
+            </div>
+            <div class="progress-spinner"></div>
+        </div>
+    </div>
+
     <!-- Back to top button -->
     <div class="back-to-top" id="back-to-top" onclick="scrollToTop()">↑</div>
 
@@ -1152,13 +1352,159 @@ def generate_conversation_html(messages, participants):
         // Search functionality with navigation
         let searchResults = [];
         let currentSearchIndex = -1;
+        let searchMode = 'text';  // 'text' or 'semantic'
+        let semanticSearchEnabled = {semantic_enabled_js};
+        let embeddingsReady = false;
+
         const searchInput = document.getElementById('search');
         const searchInfo = document.getElementById('search-info');
         const searchNav = document.getElementById('search-nav');
         const prevBtn = document.getElementById('prev-btn');
         const nextBtn = document.getElementById('next-btn');
 
-        searchInput.addEventListener('input', function() {{
+        // Check if embeddings are being generated
+        async function checkEmbeddingStatus() {{
+            if (!semanticSearchEnabled) return;
+
+            try {{
+                const response = await fetch('/embedding-status?conv_id={conversation_id}');
+                const data = await response.json();
+
+                console.log('Embedding status:', data);  // Debug log
+
+                if (data.status === 'generating') {{
+                    showProgressModal();
+                    updateProgress(data.progress || 0, data.message || 'Processing...');
+                    // Check again in 2 seconds
+                    setTimeout(checkEmbeddingStatus, 2000);
+                }} else if (data.status === 'ready') {{
+                    embeddingsReady = true;
+                    hideProgressModal();
+                }} else if (data.status === 'not_started') {{
+                    // Will start when user first clicks semantic search
+                    embeddingsReady = false;
+                    // Check again in a bit in case generation starts
+                    setTimeout(checkEmbeddingStatus, 5000);
+                }}
+            }} catch (error) {{
+                console.error('Error checking embedding status:', error);
+            }}
+        }}
+
+        function showProgressModal() {{
+            document.getElementById('progress-modal').classList.add('active');
+        }}
+
+        function hideProgressModal() {{
+            document.getElementById('progress-modal').classList.remove('active');
+        }}
+
+        function updateProgress(percentage, message) {{
+            const progressBar = document.getElementById('progress-bar');
+            const progressMessage = document.getElementById('progress-message');
+
+            progressBar.style.width = percentage + '%';
+            progressBar.textContent = percentage > 0 ? Math.round(percentage) + '%' : '';
+
+            if (message) {{
+                progressMessage.innerHTML = message + '<br><small>This is a one-time process. Future searches will be instant.</small>';
+            }}
+        }}
+
+        // Check embedding status on page load
+        window.addEventListener('load', () => {{
+            // Start checking embedding status immediately
+            checkEmbeddingStatus();
+
+            // For large conversations, check more frequently initially
+            const messageCount = document.querySelectorAll('.message').length;
+            if (messageCount >= {MIN_MESSAGES_FOR_PROGRESS}) {{
+                console.log(`Large conversation detected (${{messageCount}} messages) - monitoring embedding generation`);
+                // Check every second for the first 10 seconds
+                for (let i = 1; i <= 10; i++) {{
+                    setTimeout(checkEmbeddingStatus, i * 1000);
+                }}
+            }}
+        }});
+
+        // Toggle search mode
+        function toggleSearchMode(mode) {{
+            searchMode = mode;
+            document.querySelectorAll('.search-toggle-btn').forEach(btn => {{
+                btn.classList.remove('active');
+            }});
+            document.getElementById(`search-${{mode}}`).classList.add('active');
+
+            // Clear and re-run search
+            if (searchInput.value) {{
+                searchInput.dispatchEvent(new Event('input'));
+            }}
+        }}
+
+        // Perform semantic search
+        async function performSemanticSearch(query) {{
+            try {{
+                // First check if embeddings are being generated
+                if (!embeddingsReady) {{
+                    checkEmbeddingStatus();
+                }}
+
+                const response = await fetch(`/semantic-search?q=${{encodeURIComponent(query)}}&conv_id={conversation_id}`);
+                const data = await response.json();
+
+                if (data.results && data.results.length > 0) {{
+                    highlightSemanticResults(data.results);
+                }} else {{
+                    searchInfo.textContent = 'No semantic matches found';
+                    searchNav.style.display = 'none';
+                }}
+            }} catch (error) {{
+                console.error('Semantic search error:', error);
+                searchInfo.textContent = 'Semantic search error';
+            }}
+        }}
+
+        // Highlight semantic search results
+        function highlightSemanticResults(results) {{
+            // Clear all highlights first
+            document.querySelectorAll('.message').forEach(msg => {{
+                msg.classList.remove('semantic-match');
+                msg.style.opacity = '0.3';
+            }});
+
+            searchResults = [];
+
+            results.forEach((result, index) => {{
+                const messages = document.querySelectorAll('.message');
+                messages.forEach(msg => {{
+                    if (msg.dataset.timestamp === String(result.timestamp_ms)) {{
+                        msg.classList.add('semantic-match');
+                        msg.style.opacity = '1';
+                        searchResults.push(msg);
+
+                        // Add score indicator
+                        const scoreEl = msg.querySelector('.semantic-score');
+                        if (scoreEl) {{
+                            scoreEl.remove();
+                        }}
+                        const score = document.createElement('span');
+                        score.className = 'semantic-score';
+                        score.style.cssText = 'background: #4CAF50; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 10px;';
+                        score.textContent = `${{(result.score * 100).toFixed(0)}}% match`;
+                        msg.querySelector('.message-header').appendChild(score);
+                    }}
+                }});
+            }});
+
+            if (searchResults.length > 0) {{
+                currentSearchIndex = 0;
+                searchInfo.textContent = `Found ${{searchResults.length}} semantic matches`;
+                searchNav.style.display = 'flex';
+                updateSearchDisplay();
+            }}
+        }}
+
+        searchInput.addEventListener('input', async function() {{
             const searchTerm = this.value.toLowerCase().trim();
 
             // Clear previous highlights and results
@@ -1168,12 +1514,26 @@ def generate_conversation_html(messages, participants):
                 parent.normalize();
             }});
 
+            // Clear semantic highlights
+            document.querySelectorAll('.message').forEach(msg => {{
+                msg.classList.remove('semantic-match');
+                msg.style.opacity = '1';
+            }});
+            document.querySelectorAll('.semantic-score').forEach(el => el.remove());
+
             searchResults = [];
             currentSearchIndex = -1;
 
             if (!searchTerm) {{
                 searchInfo.textContent = '';
                 searchNav.style.display = 'none';
+                return;
+            }}
+
+            // Use semantic search if enabled and selected
+            if (semanticSearchEnabled && searchMode === 'semantic') {{
+                searchInfo.textContent = 'Searching semantically...';
+                await performSemanticSearch(searchTerm);
                 return;
             }}
 
@@ -1398,6 +1758,25 @@ def generate_conversation_html(messages, participants):
 </body>
 </html>'''
 
+    # Create semantic search toggle if available
+    if SEMANTIC_SEARCH_AVAILABLE and conversation_id:
+        semantic_toggle = '''
+                <div class="search-toggle">
+                    <button id="search-text" class="search-toggle-btn active" onclick="toggleSearchMode('text')">
+                        🔤 Text Search
+                    </button>
+                    <button id="search-semantic" class="search-toggle-btn" onclick="toggleSearchMode('semantic')">
+                        🧠 Semantic Search
+                    </button>
+                    <span style="font-size: 11px; opacity: 0.8; margin-left: 10px;">
+                        (Czech & English supported)
+                    </span>
+                </div>'''
+        semantic_enabled_js = 'true'
+    else:
+        semantic_toggle = ''
+        semantic_enabled_js = 'false'
+
     # Format the template
     html_content = html_template.format(
         participants=' & '.join(participants),
@@ -1408,7 +1787,11 @@ def generate_conversation_html(messages, participants):
         first_date=stats['first_date'],
         last_date=stats['last_date'],
         hour_chart=hour_chart,
-        messages_html=messages_html
+        messages_html=messages_html,
+        semantic_toggle=semantic_toggle,
+        semantic_enabled_js=semantic_enabled_js,
+        conversation_id=conversation_id or 0,
+        MIN_MESSAGES_FOR_PROGRESS=MIN_MESSAGES_FOR_PROGRESS
     )
 
     return html_content
@@ -1453,7 +1836,32 @@ class MessengerHTTPHandler(http.server.SimpleHTTPRequestHandler):
 
                 # Load and process conversation
                 messages, participants = load_and_process_conversation(conv['path'])
-                html_content = generate_conversation_html(messages, participants)
+
+                # Handle embeddings for semantic search
+                if SEMANTIC_SEARCH_AVAILABLE:
+                    # Store conversation data for later use
+                    self.server.conversation_data = {
+                        'messages': messages,
+                        'embeddings': None,  # Will be loaded/generated on demand
+                        'conv_id': str(conv_id)
+                    }
+
+                    # Check if embeddings exist or need generation
+                    if check_embeddings_exist(str(conv_id)):
+                        # Embeddings exist, they'll be loaded when needed
+                        print(f"✅ Embeddings already cached for conversation {conv_id}")
+                    else:
+                        # Check if conversation is large enough to show progress
+                        if len(messages) >= MIN_MESSAGES_FOR_PROGRESS:
+                            # Start generation in background for large conversations
+                            print(f"📊 Large conversation ({len(messages)} messages) - starting background embedding generation")
+                            generate_embeddings_async(messages, str(conv_id))
+                        else:
+                            # For small conversations, generate immediately without showing progress
+                            print(f"📝 Small conversation ({len(messages)} messages) - generating embeddings immediately")
+                            generate_embeddings_async(messages, str(conv_id))
+
+                html_content = generate_conversation_html(messages, participants, str(conv_id))
 
                 self.send_response(200)
                 self.send_header('Content-type', 'text/html; charset=utf-8')
@@ -1465,6 +1873,76 @@ class MessengerHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_response(500)
                 self.end_headers()
                 self.wfile.write(f"Error: {str(e)}".encode('utf-8'))
+
+        elif parsed_path.path == '/semantic-search':
+            # Handle semantic search requests
+            query_params = parse_qs(parsed_path.query)
+            query = query_params.get('q', [None])[0]
+            conv_id = query_params.get('conv_id', [None])[0]
+
+            if not query or not SEMANTIC_SEARCH_AVAILABLE:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Invalid request or semantic search not available'}).encode())
+                return
+
+            # Get conversation data
+            if hasattr(self.server, 'conversation_data') and self.server.conversation_data.get('conv_id') == conv_id:
+                messages = self.server.conversation_data['messages']
+                embeddings = self.server.conversation_data.get('embeddings')
+
+                # Load embeddings if not already loaded
+                if embeddings is None:
+                    print(f"Loading embeddings for semantic search on conversation {conv_id}")
+                    embeddings = get_or_generate_embeddings(messages, conv_id)
+                    self.server.conversation_data['embeddings'] = embeddings
+
+                # Perform semantic search
+                results = perform_semantic_search(query, messages, embeddings, top_k=20)
+
+                # Format results for JSON
+                json_results = []
+                for msg, score in results:
+                    json_results.append({
+                        'timestamp_ms': msg['timestamp_ms'],
+                        'sender': msg['sender'],
+                        'content': msg['content'][:200],  # Truncate for preview
+                        'score': float(score)
+                    })
+
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'results': json_results}).encode())
+            else:
+                self.send_response(404)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Conversation data not loaded'}).encode())
+
+        elif parsed_path.path == '/embedding-status':
+            # Return current embedding generation progress
+            query_params = parse_qs(parsed_path.query)
+            conv_id = query_params.get('conv_id', [None])[0]
+
+            if SEMANTIC_SEARCH_AVAILABLE and semantic_engine and conv_id:
+                # Check if embeddings are cached
+                if check_embeddings_exist(conv_id):
+                    status = {'status': 'ready', 'progress': 100, 'message': 'Embeddings loaded from cache'}
+                else:
+                    # Check generation progress
+                    status = semantic_engine.generation_progress.get(conv_id, {'status': 'not_started'})
+
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(status).encode())
+            else:
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'status': 'not_available'}).encode())
 
         elif parsed_path.path == '/rebuild':
             # Force rebuild index
