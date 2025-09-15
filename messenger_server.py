@@ -1094,6 +1094,208 @@ def generate_conversation_html(messages, participants, conversation_id=None):
             color: white;
         }}
 
+        /* Summarization */
+        .summarization-box {{
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+        }}
+
+        .summarization-title {{
+            font-size: 0.9em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }}
+
+        .prompt-buttons {{
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }}
+
+        .prompt-btn {{
+            padding: 10px;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            text-align: left;
+            font-size: 13px;
+            transition: background 0.2s;
+        }}
+
+        .prompt-btn:hover {{
+            background: rgba(255,255,255,0.3);
+        }}
+
+        .prompt-btn .prompt-title {{
+            font-weight: bold;
+            margin-bottom: 3px;
+        }}
+
+        .prompt-btn .prompt-desc {{
+            font-size: 11px;
+            opacity: 0.8;
+        }}
+
+        .date-filter {{
+            margin-top: 10px;
+            display: flex;
+            gap: 5px;
+        }}
+
+        .prompt-section {{
+            margin-bottom: 20px;
+        }}
+
+        .prompt-section h4 {{
+            font-size: 14px;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }}
+
+        /* Summary Modal */
+        .summary-modal {{
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+        }}
+
+        .summary-modal.active {{
+            display: block;
+        }}
+
+        .summary-content {{
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }}
+
+        .summary-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #ddd;
+        }}
+
+        .summary-close {{
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }}
+
+        .summary-close:hover {{
+            color: black;
+        }}
+
+        .summary-body {{
+            line-height: 1.6;
+            color: #333;
+        }}
+
+        .summary-body h3 {{
+            margin-top: 15px;
+            color: #444;
+        }}
+
+        .summary-body ul {{
+            margin-left: 20px;
+        }}
+
+        .date-filter input {{
+            flex: 1;
+            padding: 5px;
+            border: none;
+            border-radius: 5px;
+            font-size: 12px;
+        }}
+
+        /* Summary Modal */
+        .summary-modal {{
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }}
+
+        .summary-modal.active {{
+            display: flex;
+        }}
+
+        .summary-content {{
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+        }}
+
+        .summary-close {{
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+        }}
+
+        .summary-title {{
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #333;
+        }}
+
+        .summary-text {{
+            line-height: 1.6;
+            color: #444;
+            white-space: pre-wrap;
+        }}
+
+        .summary-loading {{
+            text-align: center;
+            padding: 40px;
+        }}
+
+        .loading-spinner {{
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }}
+
+        @keyframes spin {{
+            0% {{ transform: rotate(0deg); }}
+            100% {{ transform: rotate(360deg); }}
+        }}
+
         /* Hourly chart */
         .hour-chart {{
             height: 100px;
@@ -1311,6 +1513,8 @@ def generate_conversation_html(messages, participants, conversation_id=None):
                 <button class="filter-btn" data-filter="links">Links</button>
             </div>
 
+            {summarization_section}
+
             <div class="hour-chart">
                 {hour_chart}
             </div>
@@ -1342,6 +1546,23 @@ def generate_conversation_html(messages, participants, conversation_id=None):
                 This is a one-time process that may take a few minutes.
             </div>
             <div class="progress-spinner"></div>
+        </div>
+    </div>
+
+    <!-- Summary Modal -->
+    <div class="summary-modal" id="summary-modal">
+        <div class="summary-content">
+            <div class="summary-header">
+                <h2 id="summary-title">AI Analysis</h2>
+                <span class="summary-close" onclick="closeSummaryModal()">&times;</span>
+            </div>
+            <div class="summary-body" id="summary-text">
+                <div class="summary-loading" id="summary-loading">
+                    <div class="loading-spinner"></div>
+                    <div>Generating AI analysis...</div>
+                </div>
+                <!-- Summary content will be inserted here -->
+            </div>
         </div>
     </div>
 
@@ -1754,11 +1975,128 @@ def generate_conversation_html(messages, participants, conversation_id=None):
                 behavior: 'smooth'
             }});
         }}
+
+        // Summarization functionality
+        const conversationId = '{conversation_id}';
+        const llmAvailable = {llm_available_js};
+
+        async function generateSummary(promptType, dateFilter = null, customPrompt = null) {{
+            if (!llmAvailable) {{
+                alert('Summarization not available. Please install Ollama and llama3.2:3b');
+                return;
+            }}
+
+            // Show modal with loading state
+            const modal = document.getElementById('summary-modal');
+            const titleEl = document.getElementById('summary-title');
+            const textEl = document.getElementById('summary-text');
+
+            // Set title based on prompt type
+            const titles = {{
+                'overview': '📝 Conversation Overview',
+                'topics': '🏷️ Main Topics',
+                'timeline': '📅 Timeline of Events',
+                'memory': '💭 Important Information',
+                'date': `📅 Summary for ${{dateFilter}}`
+            }};
+
+            titleEl.textContent = titles[dateFilter ? 'date' : promptType] || 'Summary';
+            textEl.innerHTML = '<div class="summary-loading"><div class="loading-spinner"></div><div>Generating summary...</div></div>';
+            modal.classList.add('active');
+
+            try {{
+                // Build query parameters
+                const params = new URLSearchParams({{
+                    conv_id: conversationId,
+                    type: promptType
+                }});
+
+                if (dateFilter) {{
+                    params.append('date', dateFilter);
+                }}
+
+                if (customPrompt) {{
+                    params.append('prompt', customPrompt);
+                }}
+
+                // Fetch summary from server
+                const response = await fetch(`/summarize?${{params}}`);
+                const data = await response.json();
+
+                // Display summary
+                textEl.textContent = data.summary;
+
+            }} catch (error) {{
+                console.error('Error generating summary:', error);
+                textEl.textContent = 'Error generating summary. Please try again.';
+            }}
+        }}
+
+        function closeSummaryModal() {{
+            document.getElementById('summary-modal').classList.remove('active');
+        }}
+
+        // Helper functions for ready-made prompts
+        function generateSummaryWithDate(promptPrefix) {{
+            // Show date picker or use current month
+            const date = prompt('Enter month (YYYY-MM format, e.g., 2023-03):');
+            if (date && /^\\d{{4}}-\\d{{2}}$/.test(date)) {{
+                generateSummary('overview', date, `${{promptPrefix}} ${{date}}`);
+            }} else if (date) {{
+                alert('Please enter date in YYYY-MM format (e.g., 2023-03)');
+            }}
+        }}
+
+        function generateSummaryLastMonth() {{
+            const now = new Date();
+            const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const dateFilter = `${{lastMonth.getFullYear()}}-${{String(lastMonth.getMonth() + 1).padStart(2, '0')}}`;
+            generateSummary('overview', dateFilter, `What happened in ${{dateFilter}}`);
+        }}
+
+        function generateSummaryLastYear() {{
+            const now = new Date();
+            const lastYear = now.getFullYear() - 1;
+            const dateFilter = String(lastYear);
+            generateSummary('overview', dateFilter, `Year ${{lastYear}} in review`);
+        }}
+
+        function showCustomPromptInput() {{
+            document.getElementById('customPromptInput').style.display = 'block';
+            document.getElementById('customPromptText').focus();
+        }}
+
+        function hideCustomPromptInput() {{
+            document.getElementById('customPromptInput').style.display = 'none';
+            document.getElementById('customPromptText').value = '';
+        }}
+
+        function submitCustomPrompt() {{
+            const prompt = document.getElementById('customPromptText').value.trim();
+            if (prompt) {{
+                generateSummary('custom', null, prompt);
+                hideCustomPromptInput();
+            }}
+        }}
+
+        // Close modal on background click
+        document.getElementById('summary-modal').addEventListener('click', function(e) {{
+            if (e.target === this) {{
+                closeSummaryModal();
+            }}
+        }});
+
+        // Get date filter for summarization
+        function getSummaryDateFilter() {{
+            const input = document.getElementById('summary-date-filter');
+            return input ? input.value : null;
+        }}
     </script>
 </body>
 </html>'''
 
-    # Create semantic search toggle if available
+    # Create semantic search toggle and summarization section if available
+    llm_available_js = 'false'  # Default
     if SEMANTIC_SEARCH_AVAILABLE and conversation_id:
         semantic_toggle = '''
                 <div class="search-toggle">
@@ -1773,9 +2111,82 @@ def generate_conversation_html(messages, participants, conversation_id=None):
                     </span>
                 </div>'''
         semantic_enabled_js = 'true'
+
+        # Check if LLM is available for summarization
+        if semantic_engine and semantic_engine.llm_model:
+            llm_available_js = 'true'
+
+        # Add summarization section with ready-made prompts
+        summarization_section = '''
+        <div class="summarization-box">
+            <h3>🤖 AI Conversation Analysis</h3>
+            <p style="margin-bottom: 15px; color: #666;">Click a button to generate AI-powered insights about this conversation:</p>
+
+            <div class="prompt-section">
+                <h4>📊 Overview & Topics</h4>
+                <div class="prompt-buttons">
+                    <button class="prompt-btn" onclick="generateSummary('overview', null, 'Summarize this conversation')">
+                        📝 Summarize this conversation
+                    </button>
+                    <button class="prompt-btn" onclick="generateSummary('topics', null, 'What were the main topics?')">
+                        🏷️ What were the main topics?
+                    </button>
+                    <button class="prompt-btn" onclick="generateSummary('timeline', null, 'Create a timeline of key events')">
+                        📅 Timeline of key events
+                    </button>
+                </div>
+            </div>
+
+            <div class="prompt-section">
+                <h4>📅 Time-based Analysis</h4>
+                <div class="prompt-buttons">
+                    <button class="prompt-btn" onclick="generateSummaryWithDate('What did we discuss in')">
+                        🗓️ What did we discuss in... (select month)
+                    </button>
+                    <button class="prompt-btn" onclick="generateSummaryLastMonth()">
+                        📆 What happened last month?
+                    </button>
+                    <button class="prompt-btn" onclick="generateSummaryLastYear()">
+                        📅 Year in review
+                    </button>
+                </div>
+            </div>
+
+            <div class="prompt-section">
+                <h4>🔍 Memory Search</h4>
+                <div class="prompt-buttons">
+                    <button class="prompt-btn" onclick="generateSummary('memory', null, 'Find all plans and decisions')">
+                        📋 Find all plans and decisions
+                    </button>
+                    <button class="prompt-btn" onclick="showCustomPromptInput()">
+                        ✏️ Ask a custom question...
+                    </button>
+                </div>
+            </div>
+
+            <div id="customPromptInput" style="display: none; margin-top: 15px;">
+                <input type="text" id="customPromptText" placeholder="e.g., When did we plan that trip to Prague?"
+                       style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;"
+                       onkeypress="if(event.key === 'Enter') submitCustomPrompt()">
+                <button onclick="submitCustomPrompt()" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    🔍 Ask Question
+                </button>
+                <button onclick="hideCustomPromptInput()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 5px;">
+                    Cancel
+                </button>
+            </div>
+
+            <div id="summaryLoading" style="display: none; margin-top: 20px; text-align: center;">
+                <div class="spinner"></div>
+                <p style="margin-top: 10px; color: #666;">Generating AI analysis...</p>
+            </div>
+        </div>
+        '''
     else:
         semantic_toggle = ''
         semantic_enabled_js = 'false'
+        summarization_section = ''
+        llm_available_js = 'false'
 
     # Format the template
     html_content = html_template.format(
@@ -1791,7 +2202,9 @@ def generate_conversation_html(messages, participants, conversation_id=None):
         semantic_toggle=semantic_toggle,
         semantic_enabled_js=semantic_enabled_js,
         conversation_id=conversation_id or 0,
-        MIN_MESSAGES_FOR_PROGRESS=MIN_MESSAGES_FOR_PROGRESS
+        MIN_MESSAGES_FOR_PROGRESS=MIN_MESSAGES_FOR_PROGRESS,
+        summarization_section=summarization_section,
+        llm_available_js=llm_available_js
     )
 
     return html_content
@@ -1943,6 +2356,49 @@ class MessengerHTTPHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({'status': 'not_available'}).encode())
+
+        elif parsed_path.path == '/summarize':
+            # Handle conversation summarization requests
+            query_params = parse_qs(parsed_path.query)
+            conv_id = query_params.get('conv_id', [None])[0]
+            prompt_type = query_params.get('type', ['overview'])[0]
+            date_filter = query_params.get('date', [None])[0]
+            custom_prompt = query_params.get('prompt', [None])[0]
+
+            if not SEMANTIC_SEARCH_AVAILABLE or not semantic_engine:
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({
+                    'summary': '⚠️ Summarization not available. Please install Ollama and llama3.2.'
+                }).encode())
+                return
+
+            # Get conversation data
+            if hasattr(self.server, 'conversation_data') and self.server.conversation_data.get('conv_id') == conv_id:
+                messages = self.server.conversation_data['messages']
+
+                # Generate summary
+                print(f"🤖 Generating {prompt_type} summary for conversation {conv_id}")
+                if date_filter:
+                    print(f"   Filtering for date: {date_filter}")
+
+                summary = semantic_engine.summarize_messages(
+                    messages,
+                    prompt_type=prompt_type,
+                    date_filter=date_filter,
+                    custom_prompt=custom_prompt
+                )
+
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'summary': summary}).encode())
+            else:
+                self.send_response(404)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'summary': 'Conversation not loaded'}).encode())
 
         elif parsed_path.path == '/rebuild':
             # Force rebuild index

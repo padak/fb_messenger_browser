@@ -7,6 +7,7 @@ A beautiful web-based viewer for your Facebook Messenger data export with full s
 - 📱 **Complete Conversation Browser**: Browse all your Facebook Messenger conversations in one place
 - 🔍 **Advanced Search**: Search within conversations with result count and navigation
 - 🧠 **Semantic Search** (NEW): AI-powered search that understands meaning in Czech and English
+- 🤖 **AI Conversation Analysis** (NEW): Generate summaries and insights using local LLM
 - 📅 **Date Navigation**: Jump to any date with a date picker or quick buttons (Last Month, 3 Months, etc.)
 - 🖼️ **Media Support**: View photos and videos inline
 - 😀 **Emoji Reactions**: See all reactions on messages
@@ -54,7 +55,7 @@ fb_export/
         └── ...
 ```
 
-4. (Optional) Set up Ollama for semantic search:
+4. (Optional) Set up Ollama for semantic search and AI analysis:
 ```bash
 # Install Ollama
 brew install ollama  # macOS
@@ -62,8 +63,11 @@ brew install ollama  # macOS
 # Start Ollama service
 ollama serve
 
-# Pull embedding model
+# Pull embedding model for semantic search
 ollama pull nomic-embed-text
+
+# Pull LLM model for conversation analysis (2GB)
+ollama pull llama3.2:3b
 ```
 See [OLLAMA_SETUP.md](OLLAMA_SETUP.md) for detailed instructions.
 
@@ -101,6 +105,12 @@ http://localhost:8000
   - Understands meaning, not just keywords
   - Works across Czech and English
   - Find related topics even with different words
+- **AI Conversation Analysis**: Generate insights with ready-made prompts
+  - **Overview & Topics**: Summarize conversation, extract main topics, create timeline
+  - **Time-based Analysis**: Review specific months or years
+  - **Memory Search**: Find all plans, decisions, or ask custom questions
+  - Works with Czech and English conversations
+  - All processing happens locally using Ollama
 - **Date Picker**: Jump to any date in the conversation
 - **Quick Dates**: Jump to Last Month, 3 Months, 6 Months, or 1 Year ago
 - **Filters**: Filter by All, Photos, Videos, or Links
@@ -211,6 +221,14 @@ If semantic search toggle doesn't appear:
 3. Pull the model: `ollama pull nomic-embed-text`
 4. Restart the messenger server
 5. Check console for "✅ Semantic search is available" message
+
+### AI Analysis Not Working
+If the AI Conversation Analysis section doesn't appear or summaries fail:
+1. Ensure Ollama is running: `ollama serve`
+2. Pull the LLM model: `ollama pull llama3.2:3b`
+3. Check console for "✅ Ollama LLM model 'llama3.2:3b' is ready" message
+4. The model download is ~2GB, ensure you have enough disk space
+5. Summaries work best with conversations that have substantial content
 
 ### Slow Embedding Generation
 First-time embedding generation can take 5-10 minutes for large conversations:

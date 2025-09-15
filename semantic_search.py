@@ -32,17 +32,21 @@ except ImportError:
 
 
 class SemanticSearchEngine:
-    """Handles semantic search using Ollama embeddings."""
+    """Handles semantic search and summarization using Ollama."""
 
-    def __init__(self, model_name: str = "nomic-embed-text", cache_dir: str = "server_data/embeddings"):
+    def __init__(self, model_name: str = "nomic-embed-text",
+                 llm_model: str = "llama3.2:3b",
+                 cache_dir: str = "server_data/embeddings"):
         """
         Initialize the semantic search engine.
 
         Args:
             model_name: Ollama model to use for embeddings
+            llm_model: Ollama model to use for text generation/summarization
             cache_dir: Directory to cache embeddings
         """
         self.model_name = model_name
+        self.llm_model = llm_model
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -53,8 +57,9 @@ class SemanticSearchEngine:
         if not OLLAMA_AVAILABLE:
             raise ImportError("Ollama is required for semantic search. Install with: pip install ollama")
 
-        # Check if model is available
+        # Check if models are available
         self._check_ollama_model()
+        self._check_llm_model()
 
     def _check_ollama_model(self):
         """Check if the required Ollama model is installed."""
@@ -69,6 +74,22 @@ class SemanticSearchEngine:
             print("  - nomic-embed-text (good multilingual support)")
             print("  - mxbai-embed-large (larger, better quality)")
             raise RuntimeError(f"Ollama model '{self.model_name}' not available") from e
+
+    def _check_llm_model(self):
+        """Check if the required LLM model is installed."""
+        try:
+            # Try to get model info
+            ollama.show(self.llm_model)
+            print(f"✅ Ollama LLM model '{self.llm_model}' is ready")
+        except Exception:
+            print(f"⚠️ Ollama LLM model '{self.llm_model}' not found.")
+            print(f"Please install it with: ollama pull {self.llm_model}")
+            print("\nRecommended LLM models:")
+            print("  - llama3.2:3b (balanced size/quality)")
+            print("  - llama3.2:1b (smaller, faster)")
+            print("  - mistral (good multilingual)")
+            # Don't raise error - summarization is optional
+            self.llm_model = None
 
     def _get_cache_path(self, conversation_id: str) -> Path:
         """Get the cache file path for a conversation."""
@@ -290,6 +311,127 @@ class SemanticSearchEngine:
         all_results.sort(key=lambda x: x['score'], reverse=True)
 
         return all_results[:top_k]
+
+    def summarize_messages(self, messages: List[Dict], prompt_type: str = "overview",
+                          date_filter: Optional[str] = None, custom_prompt: Optional[str] = None) -> str:
+        """
+        Summarize messages using Ollama LLM.
+
+        Args:
+            messages: List of message dictionaries
+            prompt_type: Type of summary (overview, topics, timeline, memory)
+            date_filter: Optional date filter (e.g., "2023-03")
+            custom_prompt: Optional custom prompt
+
+        Returns:
+            Summary text
+        """
+        if not self.llm_model:
+            return "⚠️ LLM model not available. Please install llama3.2 with: ollama pull llama3.2:3b"
+
+        # Filter messages by date if specified
+        if date_filter:
+            filtered_messages = [
+                msg for msg in messages
+                if msg.get('iso_date', '').startswith(date_filter)
+            ]
+            if not filtered_messages:
+                return f"No messages found for {date_filter}"
+            messages = filtered_messages
+
+        # Prepare message text (limit to prevent context overflow)
+        max_messages = 500  # Adjust based on model context size
+        if len(messages) > max_messages:
+            # Sample messages evenly across the conversation
+            step = len(messages) // max_messages
+            messages = messages[::step]
+
+        # Format messages for context
+        conversation_text = self._format_messages_for_llm(messages[:max_messages])
+
+        # Build prompt based on type
+        if custom_prompt:
+            prompt = custom_prompt + "\n\nConversation:\n" + conversation_text
+        else:
+            prompt = self._build_prompt(prompt_type, conversation_text, date_filter)
+
+        try:
+            # Generate summary using Ollama
+            response = ollama.generate(
+                model=self.llm_model,
+                prompt=prompt,
+                options={
+                    'temperature': 0.7,
+                    'max_tokens': 500,
+                }
+            )
+            return response['response']
+        except Exception as e:
+            return f"Error generating summary: {e}"
+
+    def _format_messages_for_llm(self, messages: List[Dict]) -> str:
+        """Format messages for LLM context."""
+        formatted = []
+        for msg in messages:
+            if msg.get('content'):
+                sender = msg.get('sender', 'Unknown')
+                date = msg.get('iso_date', '')
+                content = msg.get('content', '')[:200]  # Truncate long messages
+                formatted.append(f"[{date}] {sender}: {content}")
+
+        return "\n".join(formatted)
+
+    def _build_prompt(self, prompt_type: str, conversation_text: str, date_filter: Optional[str]) -> str:
+        """Build prompt based on type."""
+        prompts = {
+            'overview': f"""Provide a concise summary of this conversation. Include:
+- Who is talking
+- Main topics discussed
+- Key events or decisions
+- Overall tone and relationship
+
+Conversation:
+{conversation_text}
+
+Summary:""",
+
+            'topics': f"""List the main topics discussed in this conversation. For each topic:
+- Topic name
+- How often it was discussed
+- Key points about that topic
+
+Conversation:
+{conversation_text}
+
+Main Topics:""",
+
+            'timeline': f"""Create a timeline of key events and decisions in this conversation.
+List them chronologically with dates.
+
+Conversation:
+{conversation_text}
+
+Timeline:""",
+
+            'memory': f"""Find and list all specific plans, decisions, or important information that was discussed.
+Include dates, places, and any concrete details mentioned.
+
+Conversation:
+{conversation_text}
+
+Important Information:""",
+        }
+
+        if date_filter and prompt_type == 'overview':
+            prompts['overview'] = f"""Summarize what was discussed in {date_filter}.
+Include main topics, events, and any decisions made.
+
+Conversation:
+{conversation_text}
+
+Summary for {date_filter}:"""
+
+        return prompts.get(prompt_type, prompts['overview'])
 
 
 # Utility functions for integration with messenger_server.py
