@@ -177,6 +177,26 @@ def generate_index_html(conversations):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Facebook Messenger Conversations</title>
     <style>
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #fafafa;
+            --bg-hover: #f5f5f5;
+            --text-primary: #0a0a0a;
+            --text-secondary: #6b7280;
+            --text-tertiary: #9ca3af;
+            --border-color: #e5e7eb;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-purple: #8b5cf6;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
+            --shadow-lg: 0 10px 15px rgba(0,0,0,0.1);
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --transition: all 0.2s ease;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -184,109 +204,164 @@ def generate_index_html(conversations):
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-secondary);
             min-height: 100vh;
-            padding: 20px;
+            padding: 0;
+            color: var(--text-primary);
+            line-height: 1.6;
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 1200px;
             margin: 0 auto;
+            padding: 0 24px;
         }
 
         .header {
-            text-align: center;
-            color: white;
-            margin-bottom: 30px;
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 48px 0;
+            margin-bottom: 32px;
         }
 
         .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .header-subtitle {
+            color: var(--text-secondary);
+            font-size: 16px;
+            margin-bottom: 24px;
         }
 
         .stats {
             display: flex;
-            justify-content: center;
-            gap: 30px;
-            margin: 20px 0;
+            gap: 48px;
+            margin-top: 24px;
         }
 
         .stat {
-            text-align: center;
+            text-align: left;
         }
 
         .stat-number {
-            font-size: 2em;
-            font-weight: bold;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.5px;
         }
 
         .stat-label {
-            font-size: 0.9em;
-            opacity: 0.9;
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 2px;
         }
 
         .search-box {
-            max-width: 600px;
-            margin: 30px auto;
+            margin: 32px 0;
         }
 
         .search-input {
             width: 100%;
-            padding: 15px 20px;
-            font-size: 16px;
-            border: none;
-            border-radius: 30px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            max-width: 600px;
+            padding: 12px 20px 12px 48px;
+            font-size: 15px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--bg-primary);
+            transition: var(--transition);
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="%236b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>');
+            background-repeat: no-repeat;
+            background-position: 16px center;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .search-input::placeholder {
+            color: var(--text-tertiary);
         }
 
         .category {
-            background: white;
-            border-radius: 15px;
-            margin-bottom: 30px;
+            background: var(--bg-primary);
+            border-radius: var(--radius-lg);
+            margin-bottom: 24px;
+            border: 1px solid var(--border-color);
             overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: var(--transition);
         }
 
         .category-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 15px 20px;
-            font-size: 1.2em;
-            font-weight: bold;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 16px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .conversations {
-            max-height: 400px;
+            max-height: 500px;
             overflow-y: auto;
+        }
+
+        .conversations::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .conversations::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+
+        .conversations::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        .conversations::-webkit-scrollbar-thumb:hover {
+            background: var(--text-tertiary);
         }
 
         .conversation {
             display: flex;
             align-items: center;
-            padding: 15px 20px;
-            border-bottom: 1px solid #e0e0e0;
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border-color);
             cursor: pointer;
-            transition: background 0.2s;
+            transition: var(--transition);
+        }
+
+        .conversation:last-child {
+            border-bottom: none;
         }
 
         .conversation:hover {
-            background: #f5f5f5;
+            background: var(--bg-hover);
         }
 
         .conversation-avatar {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            border-radius: var(--radius-md);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: bold;
-            color: white;
-            margin-right: 15px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            background: var(--bg-secondary);
+            margin-right: 16px;
             flex-shrink: 0;
-            font-size: 18px;
+            font-size: 16px;
+            border: 1px solid var(--border-color);
         }
 
         .conversation-info {
@@ -296,71 +371,74 @@ def generate_index_html(conversations):
 
         .conversation-name {
             font-weight: 600;
-            font-size: 1.1em;
-            margin-bottom: 5px;
+            font-size: 15px;
+            margin-bottom: 4px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            color: var(--text-primary);
         }
 
         .conversation-meta {
             display: flex;
-            gap: 15px;
-            font-size: 0.9em;
-            color: #666;
+            gap: 16px;
+            font-size: 13px;
+            color: var(--text-secondary);
         }
 
         .conversation-stats {
             display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 5px;
+            align-items: center;
+            gap: 8px;
         }
 
         .message-count {
-            background: #667eea;
-            color: white;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-weight: bold;
-            font-size: 0.9em;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            font-weight: 600;
+            font-size: 13px;
+            border: 1px solid var(--border-color);
         }
 
         .date-range {
-            font-size: 0.8em;
-            color: #999;
+            font-size: 12px;
+            color: var(--text-tertiary);
         }
 
         .loading {
             text-align: center;
-            padding: 40px;
-            color: white;
-            font-size: 1.2em;
+            padding: 60px;
+            color: var(--text-secondary);
+            font-size: 16px;
         }
 
         .photo-badge {
-            background: #4CAF50;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 0.8em;
+            background: var(--accent-green);
+            color: #0a0a0a;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 600;
         }
 
-        /* Avatar colors */
-        .avatar-0 { background: linear-gradient(135deg, #FF6B6B, #C44569); }
-        .avatar-1 { background: linear-gradient(135deg, #4ECDC4, #44A08D); }
-        .avatar-2 { background: linear-gradient(135deg, #45B7D1, #2196F3); }
-        .avatar-3 { background: linear-gradient(135deg, #96CEB4, #88D8B0); }
-        .avatar-4 { background: linear-gradient(135deg, #FFEAA7, #FDCB6E); }
-        .avatar-5 { background: linear-gradient(135deg, #DDA0DD, #BA55D3); }
-        .avatar-6 { background: linear-gradient(135deg, #F8B500, #FF6B6B); }
-        .avatar-7 { background: linear-gradient(135deg, #00C9FF, #92FE9D); }
+        /* Remove avatar gradients - use subtle backgrounds */
+        .avatar-0 { background: #fef3c7; color: #92400e; }
+        .avatar-1 { background: #dbeafe; color: #1e40af; }
+        .avatar-2 { background: #dcfce7; color: #166534; }
+        .avatar-3 { background: #fce7f3; color: #9f1239; }
+        .avatar-4 { background: #e9d5ff; color: #6b21a8; }
+        .avatar-5 { background: #fed7aa; color: #9a3412; }
+        .avatar-6 { background: #fecaca; color: #991b1b; }
+        .avatar-7 { background: #d1fae5; color: #065f46; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>📱 Facebook Messenger Archive</h1>
+    <div class="header">
+        <div class="container">
+            <h1>Facebook Messenger Archive</h1>
+            <p class="header-subtitle">Browse and search your complete message history</p>
             <div class="stats">
                 <div class="stat">
                     <div class="stat-number">''' + str(len(conversations)) + '''</div>
@@ -376,7 +454,9 @@ def generate_index_html(conversations):
                 </div>
             </div>
         </div>
+    </div>
 
+    <div class="container">
         <div class="search-box">
             <input type="text" class="search-input" id="search" placeholder="Search conversations...">
         </div>
@@ -393,7 +473,7 @@ def generate_index_html(conversations):
         cat_display = cat.replace('_', ' ').title()
         html_content += f'''
         <div class="category">
-            <div class="category-header">📁 {cat_display} ({len(categories[cat])} conversations)</div>
+            <div class="category-header">{cat_display} • {len(categories[cat])} conversations</div>
             <div class="conversations">'''
 
         for conv in categories[cat]:
@@ -404,7 +484,7 @@ def generate_index_html(conversations):
             initials = ''.join([p[0].upper() for p in conv['participants'][0].split()[:2]])
             avatar_class = f"avatar-{conv['id'] % 8}"
 
-            photo_badge = f'<span class="photo-badge">📷 {conv.get("photo_count", 0)}</span>' if conv.get('photo_count', 0) > 0 else ''
+            photo_badge = f'<span class="photo-badge">{conv.get("photo_count", 0)} photos</span>' if conv.get('photo_count', 0) > 0 else ''
 
             html_content += f'''
                 <div class="conversation" onclick="loadConversation({conv['id']})">
@@ -699,48 +779,53 @@ def generate_conversation_html(messages, participants, conversation_id=None):
 
         /* Back button */
         .back-button {{
-            background: rgba(255,255,255,0.2);
-            border: none;
-            color: white;
+            background: #f5f5f5;
+            border: 1px solid #e5e7eb;
+            color: #0a0a0a;
             padding: 10px 20px;
-            border-radius: 20px;
+            border-radius: 8px;
             cursor: pointer;
             font-size: 14px;
             margin-bottom: 20px;
             width: 100%;
-            transition: background 0.3s;
+            transition: all 0.2s;
+            font-weight: 500;
         }}
 
         .back-button:hover {{
-            background: rgba(255,255,255,0.3);
+            background: #e5e7eb;
         }}
 
         /* Sidebar */
         .sidebar {{
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
+            background: #f8f9fa;
+            color: #0a0a0a;
+            padding: 24px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 20px;
+            border-right: 1px solid #e5e7eb;
         }}
 
         .sidebar h1 {{
             font-size: 1.5em;
             margin-bottom: 10px;
+            color: #0a0a0a;
+            font-weight: 700;
         }}
 
         .participants {{
             font-size: 0.9em;
-            opacity: 0.9;
+            color: #6b7280;
             margin-bottom: 20px;
         }}
 
         .stats {{
-            background: rgba(255,255,255,0.1);
-            padding: 15px;
-            border-radius: 10px;
+            background: #fafafa;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
         }}
 
         .stat-item {{
@@ -750,27 +835,31 @@ def generate_conversation_html(messages, participants, conversation_id=None):
         .stat-number {{
             font-size: 2em;
             font-weight: bold;
+            color: #0a0a0a;
         }}
 
         .stat-label {{
             font-size: 0.9em;
-            opacity: 0.9;
+            color: #6b7280;
         }}
 
         /* Date Navigation */
         .date-navigation {{
-            background: rgba(255,255,255,0.1);
-            padding: 15px;
-            border-radius: 10px;
+            background: #fafafa;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
         }}
 
         .date-picker {{
             width: 100%;
             padding: 10px;
-            border: none;
+            border: 1px solid #e5e7eb;
             border-radius: 8px;
+            background: white;
             font-size: 14px;
             margin-bottom: 10px;
+            color: #0a0a0a;
         }}
 
         .quick-dates {{
@@ -783,20 +872,22 @@ def generate_conversation_html(messages, participants, conversation_id=None):
             padding: 8px;
             border: none;
             border-radius: 5px;
-            background: rgba(255,255,255,0.2);
-            color: white;
+            background: white;
+            border: 1px solid #e5e7eb;
+            color: #0a0a0a;
             cursor: pointer;
             font-size: 12px;
             transition: background 0.2s;
         }}
 
         .quick-date-btn:hover {{
-            background: rgba(255,255,255,0.3);
+            background: #e5e7eb;
         }}
 
         /* Search */
         .search-box {{
-            background: rgba(255,255,255,0.1);
+            background: #fafafa;
+            border: 1px solid #e5e7eb;
             padding: 15px;
             border-radius: 10px;
         }}
@@ -812,20 +903,22 @@ def generate_conversation_html(messages, participants, conversation_id=None):
             padding: 6px 12px;
             border: none;
             border-radius: 15px;
-            background: rgba(255,255,255,0.2);
-            color: white;
+            background: white;
+            border: 1px solid #e5e7eb;
+            color: #0a0a0a;
             cursor: pointer;
             font-size: 12px;
             transition: background 0.3s;
         }}
 
         .search-toggle-btn.active {{
-            background: rgba(255,255,255,0.4);
+            background: #3b82f6;
+            border-color: #3b82f6;
             font-weight: bold;
         }}
 
         .search-toggle-btn:hover {{
-            background: rgba(255,255,255,0.3);
+            background: #e5e7eb;
         }}
 
         .search-input {{
@@ -854,14 +947,15 @@ def generate_conversation_html(messages, participants, conversation_id=None):
             padding: 8px;
             border: none;
             border-radius: 5px;
-            background: rgba(255,255,255,0.2);
-            color: white;
+            background: white;
+            border: 1px solid #e5e7eb;
+            color: #0a0a0a;
             cursor: pointer;
             font-size: 12px;
         }}
 
         .search-nav button:hover {{
-            background: rgba(255,255,255,0.3);
+            background: #e5e7eb;
         }}
 
         .search-nav button:disabled {{
@@ -878,20 +972,22 @@ def generate_conversation_html(messages, participants, conversation_id=None):
 
         .filter-btn {{
             padding: 8px 15px;
-            background: rgba(255,255,255,0.2);
+            background: white;
+            border: 1px solid #e5e7eb;
             border: none;
             border-radius: 20px;
-            color: white;
+            color: #0a0a0a;
             cursor: pointer;
             transition: background 0.3s;
         }}
 
         .filter-btn:hover {{
-            background: rgba(255,255,255,0.3);
+            background: #e5e7eb;
         }}
 
         .filter-btn.active {{
-            background: rgba(255,255,255,0.4);
+            background: #3b82f6;
+            border-color: #3b82f6;
             font-weight: bold;
         }}
 
@@ -946,7 +1042,7 @@ def generate_conversation_html(messages, participants, conversation_id=None):
             width: 36px;
             height: 36px;
             border-radius: 50%;
-            color: white;
+            color: #0a0a0a;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -958,19 +1054,23 @@ def generate_conversation_html(messages, participants, conversation_id=None):
 
         /* Different colors for different people */
         .message-sender-0 .avatar {{
-            background: linear-gradient(135deg, #0084ff, #44bec7);
+            background: #dbeafe;
+            color: #1e40af;
         }}
 
         .message-sender-1 .avatar {{
-            background: linear-gradient(135deg, #fa3c4c, #d696bb);
+            background: #fce7f3;
+            color: #9f1239;
         }}
 
         .message-sender-2 .avatar {{
-            background: linear-gradient(135deg, #00c851, #00ff87);
+            background: #dcfce7;
+            color: #166534;
         }}
 
         .message-sender-3 .avatar {{
-            background: linear-gradient(135deg, #ff6900, #fcb900);
+            background: #fed7aa;
+            color: #9a3412;
         }}
 
         .message-content {{
@@ -1091,12 +1191,13 @@ def generate_conversation_html(messages, participants, conversation_id=None):
 
         .highlight.current {{
             background: #ff9800;
-            color: white;
+            color: #0a0a0a;
         }}
 
         /* Summarization */
         .summarization-box {{
-            background: rgba(255,255,255,0.1);
+            background: #fafafa;
+            border: 1px solid #e5e7eb;
             padding: 15px;
             border-radius: 10px;
             margin-top: 15px;
@@ -1117,10 +1218,11 @@ def generate_conversation_html(messages, participants, conversation_id=None):
 
         .prompt-btn {{
             padding: 10px;
-            background: rgba(255,255,255,0.2);
+            background: white;
+            border: 1px solid #e5e7eb;
             border: none;
             border-radius: 8px;
-            color: white;
+            color: #0a0a0a;
             cursor: pointer;
             text-align: left;
             font-size: 13px;
@@ -1128,7 +1230,7 @@ def generate_conversation_html(messages, participants, conversation_id=None):
         }}
 
         .prompt-btn:hover {{
-            background: rgba(255,255,255,0.3);
+            background: #e5e7eb;
         }}
 
         .prompt-btn .prompt-title {{
@@ -1307,7 +1409,7 @@ def generate_conversation_html(messages, participants, conversation_id=None):
 
         .hour-bar {{
             flex: 1;
-            background: rgba(255,255,255,0.5);
+            background: #3b82f6;
             border-radius: 2px 2px 0 0;
             min-height: 2px;
             position: relative;
@@ -1320,7 +1422,7 @@ def generate_conversation_html(messages, participants, conversation_id=None):
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0,0,0,0.8);
-            color: white;
+            color: #0a0a0a;
             padding: 4px 8px;
             border-radius: 4px;
             font-size: 11px;
@@ -1354,7 +1456,7 @@ def generate_conversation_html(messages, participants, conversation_id=None):
             position: absolute;
             top: 20px;
             right: 40px;
-            color: white;
+            color: #0a0a0a;
             font-size: 40px;
             cursor: pointer;
         }}
@@ -1402,13 +1504,13 @@ def generate_conversation_html(messages, participants, conversation_id=None):
 
         .progress-bar {{
             height: 100%;
-            background: linear-gradient(90deg, #667eea, #764ba2);
+            background: #3b82f6;
             width: 0%;
             transition: width 0.3s ease;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: white;
+            color: #0a0a0a;
             font-weight: bold;
         }}
 
@@ -1420,7 +1522,7 @@ def generate_conversation_html(messages, participants, conversation_id=None):
 
         .progress-spinner {{
             border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
+            border-top: 4px solid #3b82f6;
             border-radius: 50%;
             width: 40px;
             height: 40px;
@@ -1438,8 +1540,8 @@ def generate_conversation_html(messages, participants, conversation_id=None):
             position: fixed;
             bottom: 20px;
             right: 20px;
-            background: #667eea;
-            color: white;
+            background: #3b82f6;
+            color: #0a0a0a;
             width: 50px;
             height: 50px;
             border-radius: 50%;
@@ -1450,6 +1552,7 @@ def generate_conversation_html(messages, participants, conversation_id=None):
             opacity: 0;
             transition: opacity 0.3s;
             z-index: 100;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }}
 
         .back-to-top.visible {{
